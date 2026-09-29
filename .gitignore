@@ -1,0 +1,19 @@
+# 原始資料不上傳 main 分支（資料是存在另一個 data 分支）
+data/raw/*
+!data/raw/.gitkeep
+data/processed/
+
+# 密鑰：絕對不能 commit
+.env
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.ipynb_checkpoints/
+
+# 作業系統
+.DS_Store
+Thumbs.db
+desktop.ini

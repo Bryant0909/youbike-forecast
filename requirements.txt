@@ -1,0 +1,6 @@
+requests
+pandas
+pyarrow
+# 階段 3 再裝：
+# lightgbm
+# scikit-learn

@@ -1,0 +1,6 @@
+# 統一換行符號：你的電腦是 Windows（CRLF），但 GitHub Actions 跑在 Ubuntu（LF）。
+# 讓所有文字檔在 repo 裡一律存成 LF，避免兩邊來回改動時整個檔案都被判定成「有變更」。
+* text=auto eol=lf
+
+# Parquet 是二進位檔，不要做任何換行轉換（會弄壞檔案）
+*.parquet binary
