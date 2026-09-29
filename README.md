@@ -18,9 +18,14 @@
 | 4 | 上線：網頁或 LINE Bot | 可以實際使用 |
 | 5 | 追蹤真實準確率、寫失敗案例 | 報告 |
 
+## 換電腦 / 重新安裝
+
+看 [`SETUP.md`](SETUP.md) —— 從全新電腦把整個專案（含累積的資料）還原的完整步驟。
+
 ## 專案結構
 
 ```
+SETUP.md       換電腦時怎麼還原
 scripts/       資料收集程式
 src/youbike/   特徵工程、模型
 data/raw/      原始資料（不上傳 GitHub）
@@ -31,4 +36,11 @@ AI_LOG.md      AI 協作紀錄
 
 ## 狀態
 
-🚧 階段 0：準備中
+🚧 phase 0 進行中
+
+- [x] 0-1 確認 data.taipei YouBike 2.0 即時 API 可用（1808 站）
+- [x] 0-2 建立 GitHub public repo
+- [x] 0-3 `scripts/collect.py` 收集程式
+- [ ] 0-4 GitHub Actions 每 5 分鐘排程
+- [ ] 0-5 每日壓縮
+- [ ] 0-6 斷線監控

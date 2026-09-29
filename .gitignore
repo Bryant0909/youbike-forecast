@@ -3,6 +3,9 @@ data/raw/*
 !data/raw/.gitkeep
 data/processed/
 
+# data 分支用 git worktree 展開的位置（內容屬於 data 分支，不屬於 main）
+data-branch/
+
 # 密鑰：絕對不能 commit
 .env
 

@@ -52,6 +52,18 @@ SOURCE_URL = (
 
 TAIPEI_TZ = timezone(timedelta(hours=8))  # 台北時間 = UTC+8
 
+# 【可攜性】所有路徑都從「這個程式檔的位置」往回推算出專案根目錄，
+# 而不是用「執行時所在的資料夾」。
+#
+# 為什麼重要：如果用相對路徑 "data/raw"，那就只有在專案根目錄下執行才會對。
+# 從別的地方執行（例如在 scripts/ 裡面跑、或用工作排程器跑）就會把資料
+# 存到錯誤的地方，而且不會報錯 —— 你會以為有在收，其實檔案散在別處。
+#
+# 這樣寫的另一個好處：換電腦後不管專案放在哪個磁碟、哪個資料夾、
+# 路徑裡有沒有中文或空格，都不用改任何一行程式碼。
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DEFAULT_OUT_DIR = os.path.join(REPO_ROOT, "data", "raw")
+
 # 抓取失敗時重試的間隔（秒）。網路偶爾抽風很正常，重試比直接放棄好。
 RETRY_WAITS = [2, 5, 10]
 
@@ -119,6 +131,14 @@ STATIONS_SCHEMA = pa.schema([
 def log(msg):
     """統一的訊息輸出格式，前面加上時間，方便之後在 Actions 的紀錄裡對時間。"""
     print("[{:%H:%M:%S}] {}".format(datetime.now(TAIPEI_TZ), msg), flush=True)
+
+
+def rel(path):
+    """把絕對路徑縮短成相對於專案根目錄的樣子，純粹是為了訊息好讀。"""
+    try:
+        return os.path.relpath(path, REPO_ROOT).replace("\\", "/")
+    except ValueError:
+        return path  # 不同磁碟時算不出相對路徑，直接印原本的
 
 
 def parse_taipei_time(s):
@@ -263,7 +283,8 @@ def update_stations(records, now, path, dry_run):
 
 def main():
     ap = argparse.ArgumentParser(description="抓一次 YouBike 即時資料並存成 Parquet")
-    ap.add_argument("--out-dir", default="data/raw", help="資料存放的資料夾")
+    ap.add_argument("--out-dir", default=DEFAULT_OUT_DIR,
+                    help="資料存放的資料夾（預設是專案裡的 data/raw，不受執行位置影響）")
     ap.add_argument("--dry-run", action="store_true", help="只抓資料不存檔，用來測試")
     args = ap.parse_args()
 
@@ -300,14 +321,14 @@ def main():
     if args.dry_run:
         log("[dry-run] 不寫檔。表格大小：{} 列 x {} 欄".format(
             table.num_rows, table.num_columns))
-        log("[dry-run] 本來會寫到：" + snap_path)
+        log("[dry-run] 本來會寫到：" + rel(snap_path))
         log("[dry-run] 前 3 列：")
         for row in table.to_pylist()[:3]:
             log("    " + str(row))
     else:
         atomic_write_parquet(table, snap_path)
         size_kb = os.path.getsize(snap_path) / 1024
-        log("已存檔：{}（{:.1f} KB）".format(snap_path, size_kb))
+        log("已存檔：{}（{:.1f} KB）".format(rel(snap_path), size_kb))
 
     stations_path = os.path.join(args.out_dir, "stations.parquet")
     log("站點基本資料：" + update_stations(records, fetched_at, stations_path, args.dry_run))
