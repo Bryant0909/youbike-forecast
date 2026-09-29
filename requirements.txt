@@ -1,6 +1,13 @@
-requests
-pandas
-pyarrow
+# 本機開發與分析用。
+# （Actions 上的收集工作只裝 requirements-collect.txt，比較輕）
+
+-r requirements-collect.txt
+
+# ⚠️ pandas 鎖在 2.x：
+# 3.0.x 在 Windows 11 會被「智慧型應用程式控制」擋掉 DLL，import 時就掛掉
+# （錯誤訊息：DLL load failed while importing groupby: 應用程式控制原則已封鎖此檔案）
+pandas>=2.2,<3
+
 # 階段 3 再裝：
 # lightgbm
 # scikit-learn

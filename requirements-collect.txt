@@ -1,0 +1,5 @@
+# GitHub Actions 每 5 分鐘收集資料時「只」需要這兩個套件。
+# 刻意不含 pandas —— 收集程式用 pyarrow 就夠了，而 pandas 又大又慢，
+# 一天安裝 288 次很浪費時間。分析用的套件放在 requirements.txt。
+requests>=2.31
+pyarrow>=15.0
