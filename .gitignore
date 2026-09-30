@@ -12,6 +12,10 @@ data-branch/
 # Python
 __pycache__/
 *.pyc
+# pip install -e . 產生的安裝中繼資料，每次重裝都會變，不該進版本庫
+*.egg-info/
+build/
+dist/
 .venv/
 venv/
 .ipynb_checkpoints/

@@ -1,8 +1,0 @@
-README.md
-pyproject.toml
-src/youbike/__init__.py
-src/youbike/data.py
-src/youbike_forecast.egg-info/PKG-INFO
-src/youbike_forecast.egg-info/SOURCES.txt
-src/youbike_forecast.egg-info/dependency_links.txt
-src/youbike_forecast.egg-info/top_level.txt

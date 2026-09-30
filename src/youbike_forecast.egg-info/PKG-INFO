@@ -1,5 +1,0 @@
-Metadata-Version: 2.4
-Name: youbike-forecast
-Version: 0.1.0
-Summary: 預測台北 YouBike 站點 30 分鐘後會不會借不到車
-Requires-Python: >=3.11
