@@ -14,3 +14,4 @@
 | 2026-09-30 | phase 1-1：資料載入層 | `src/youbike/data.py`（自動找資料位置、吸收壓縮／未壓縮兩種形式、行政區篩選、時間欄位、去重、資料盤點報告）、`pyproject.toml`；指出用 5 個時間點做 EDA 沒有意義，phase 1 先只做載入層；造了時間戳記正確的三天測試資料實測，抓到 `available_days()` 因 `listdir` 排序而漏掉 100 個小檔的靜默資料遺失 bug，以及誤以為 `stations.parquet` 有 `total_docks` 欄位的錯 | 待確認 |
 | 2026-09-30 | 確認 GitHub 排程不可用、改走外部觸發 | 用一個最陽春的心跳 workflow 做對照實驗，證明問題不在 `collect.yml` 而在 repo 的排程器；三個 workflow 加上 `repository_dispatch` 觸發點並用 API 實測通過；指出排程壞掉會連帶讓壓縮與監控失效，因此外部觸發必須一起涵蓋 | 選定方案 ①（外部排程服務），要自行建 PAT 與註冊服務 |
 | 2026-09-30 | phase 0-7：天氣資料收集 | 先探勘三支氣象署 API 再選型（時間解析度 10 分鐘 vs 每小時、是否涵蓋大安區）、`scripts/collect_weather.py`（沿用檔名去重與動靜分離、-99 轉 null、WGS84 座標）、接進 collect.yml 並加 `continue-on-error` 保護主要資料；指出 `Now.Precipitation` 語意未確認、在驗證前不該拿來做特徵 | 待確認 |
+| 2026-09-30 | 改用長時間執行的收集迴圈 | `scripts/collect_loop.sh` 與改寫 `collect.yml`（timeout 350 分鐘、每輪獨立接錯、每輪推送、睡眠扣除耗時避免漂移）；本機實測 3 輪間隔無漂移 | 卡在註冊外部服務，決定改用完全不需使用者操作的方案；已提醒撤銷誤貼在對話中的 PAT |
