@@ -46,10 +46,10 @@ jobs:
 
     steps:
       - name: 取出程式（main 分支）
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: 取出資料分支（data）到 data-branch/
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: data
           path: data-branch
@@ -58,7 +58,7 @@ jobs:
           fetch-depth: 1
 
       - name: 安裝 Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.11"
           # 把下載好的套件存起來重用，省下每次重新下載 pyarrow 的時間
