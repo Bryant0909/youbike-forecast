@@ -1,0 +1,6 @@
+# Parquet 是二進位檔，不要做任何換行轉換（會弄壞檔案）
+*.parquet binary
+*.parquet -diff
+
+# 文字檔一律存成 LF
+*.md text eol=lf
