@@ -1,0 +1,154 @@
+# phase 0-6：每天檢查昨天的資料收得怎麼樣，不夠就自動開 GitHub Issue 通知你。
+#
+# ┌─ 為什麼需要這個 ───────────────────────────────────────────────────┐
+# │ 最會殺死這類專案的不是「程式壞掉」，而是「程式壞掉了但你不知道」。 │
+# │ 沒有這個 workflow，收集斷了兩個月你也不會發現 —— 直到想開始建模。  │
+# └────────────────────────────────────────────────────────────────────┘
+#
+# ⚠️ 關於通知：GitHub 有一個很容易踩的坑
+#   你對自己的 repo 預設的通知設定是「Participating and @mentions」，
+#   意思是「只有跟你有關的才寄信」。機器人開的 Issue 你並沒有參與，
+#   所以【不會收到 email】—— 那整個監控就等於白做。
+#   解法是開 Issue 時【指派給你】並在內容裡 @ 你，這兩件事都會觸發通知。
+#   這也是下面 assignee 和 @${{ github.repository_owner }} 的用意。
+name: 檢查資料覆蓋率
+
+on:
+  schedule:
+    # UTC 19:30 = 台北時間隔天凌晨 03:30。
+    # 故意排在 compact（19:00）之後半小時，這樣壓縮已經做完，
+    # 檢查的是最終狀態（不過程式兩種形式都讀得懂，順序顛倒也不會錯）。
+    - cron: "30 19 * * *"
+  workflow_dispatch:
+    inputs:
+      date:
+        description: "要檢查的日期 YYYY-MM-DD（留空 = 昨天）"
+        required: false
+        type: string
+
+permissions:
+  contents: read   # 讀程式和資料
+  issues: write    # 開 Issue / 留言 / 關閉
+
+concurrency:
+  group: coverage
+  cancel-in-progress: false
+
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: 取出程式（main 分支）
+        uses: actions/checkout@v7
+
+      - name: 取出資料分支（data）到 data-branch/
+        uses: actions/checkout@v7
+        with:
+          ref: data
+          path: data-branch
+          fetch-depth: 1
+
+      - name: 安裝 Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements-collect.txt
+
+      - name: 安裝套件
+        run: pip install -r requirements-collect.txt
+
+      - name: 檢查覆蓋率
+        id: check
+        # 這一步永遠會成功（離開代碼 0）—— 「覆蓋率不足」不是執行失敗，
+        # 而是它成功地發現了問題。結果放在 outputs.status（ok / alert）裡，
+        # 讓後面的步驟決定要做什麼。
+        #
+        # 手動輸入的日期走 env 再用 shell 判斷，而不是直接用 ${{ }} 插進指令裡。
+        # 為什麼？把外部輸入直接貼進 shell 指令是典型的注入漏洞 ——
+        # 雖然這個 repo 只有你能手動觸發，但養成習慣比事後補救便宜。
+        env:
+          INPUT_DATE: ${{ inputs.date }}
+        run: |
+          set -euo pipefail
+          ARGS=(--data-dir "$GITHUB_WORKSPACE/data-branch"
+                --report-file "$RUNNER_TEMP/report.md")
+          if [ -n "${INPUT_DATE:-}" ]; then
+            ARGS+=(--date "$INPUT_DATE")
+          fi
+          python scripts/check_coverage.py "${ARGS[@]}"
+
+      # ---------------------------------------------------------------------
+      # 有問題 -> 開 Issue，或在已經開著的那個底下留言
+      # ---------------------------------------------------------------------
+      - name: 有問題就通知
+        if: steps.check.outputs.status == 'alert'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OWNER: ${{ github.repository_owner }}
+          DATE: ${{ steps.check.outputs.date }}
+        run: |
+          set -euo pipefail
+
+          # 標籤不存在的話 gh issue create --label 會直接失敗，所以先確保它在。
+          # 已經存在時 gh 會報錯，用 || true 忽略掉。
+          gh label create coverage-alert \
+            --color D93F0B \
+            --description "資料收集覆蓋率警報（自動產生）" 2>/dev/null || true
+
+          # 找有沒有已經開著的警報 Issue。
+          # 設計成「一個持續中的問題 = 一個 Issue 串」，而不是每天開一個新的 ——
+          # 如果收集壞了兩星期，你不會想看到 14 個一樣的 Issue。
+          EXISTING=$(gh issue list --label coverage-alert --state open \
+                       --limit 1 --json number --jq '.[0].number // empty')
+
+          if [ -n "$EXISTING" ]; then
+            echo "已經有開著的 Issue #$EXISTING，在它底下留言"
+            {
+              echo "### $DATE 的檢查結果（問題仍未解決）"
+              echo ""
+              cat "$RUNNER_TEMP/report.md"
+            } > "$RUNNER_TEMP/comment.md"
+            gh issue comment "$EXISTING" --body-file "$RUNNER_TEMP/comment.md"
+          else
+            echo "開一個新的 Issue"
+            {
+              # @ 你本人 —— 這是能收到 email 的關鍵之一（見檔案開頭的說明）
+              echo "@$OWNER"
+              echo ""
+              cat "$RUNNER_TEMP/report.md"
+            } > "$RUNNER_TEMP/body.md"
+            gh issue create \
+              --title "⚠️ 資料收集異常：$DATE" \
+              --label coverage-alert \
+              --assignee "$OWNER" \
+              --body-file "$RUNNER_TEMP/body.md"
+          fi
+
+      # ---------------------------------------------------------------------
+      # 恢復正常 -> 把還開著的警報 Issue 留言並關掉
+      # ---------------------------------------------------------------------
+      - name: 恢復正常就關掉舊的警報
+        if: steps.check.outputs.status == 'ok'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DATE: ${{ steps.check.outputs.date }}
+        run: |
+          set -euo pipefail
+          EXISTING=$(gh issue list --label coverage-alert --state open \
+                       --limit 1 --json number --jq '.[0].number // empty')
+          if [ -z "$EXISTING" ]; then
+            echo "沒有開著的警報 Issue，一切正常，什麼都不用做"
+            exit 0
+          fi
+          # 自動關掉而不是留給你手動處理：Issue 列表乾淨，
+          # 「有開著的 Issue」就確定等於「現在真的有問題」。
+          {
+            echo "✅ $DATE 的資料已經恢復正常，自動關閉這個警報。"
+            echo ""
+            cat "$RUNNER_TEMP/report.md"
+          } > "$RUNNER_TEMP/comment.md"
+          gh issue comment "$EXISTING" --body-file "$RUNNER_TEMP/comment.md"
+          gh issue close "$EXISTING" --reason completed

@@ -26,14 +26,25 @@
 
 ```
 SETUP.md       換電腦時怎麼還原
-.github/       GitHub Actions 排程（收集、壓縮）
-scripts/       資料收集與壓縮程式
+.github/       GitHub Actions 排程（收集、壓縮、監控）
+scripts/       資料收集、壓縮、覆蓋率檢查
 src/youbike/   特徵工程、模型
 data/raw/      原始資料（不上傳 GitHub）
 notebooks/     EDA 與實驗
 docs/          設計決策
 AI_LOG.md      AI 協作紀錄
 ```
+
+## 自動化（全部跑在 GitHub Actions 上）
+
+| 排程（台北時間） | 做什麼 | 程式 |
+|---|---|---|
+| 每 5 分鐘 | 抓一次全台北 1808 站的即時資料，存成 Parquet | `scripts/collect.py` |
+| 每天 03:00 | 把前一天 288 個小檔壓成一個日檔（小 7 倍） | `scripts/compact.py` |
+| 每天 03:30 | 檢查覆蓋率／空隙／尖峰時段，不足就自動開 Issue 通知 | `scripts/check_coverage.py` |
+
+資料存在 [`data` 分支](https://github.com/Bryant0909/youbike-forecast/tree/data)，
+程式和資料的 commit 歷史完全分開。
 
 ## 狀態
 
@@ -44,7 +55,7 @@ AI_LOG.md      AI 協作紀錄
 - [x] 0-3 `scripts/collect.py` 收集程式
 - [x] 0-4 GitHub Actions 每 5 分鐘排程（`.github/workflows/collect.yml`）
 - [x] 0-5 每日壓縮 288 個小檔成一個日檔（`scripts/compact.py`，實測小 7 倍）
-- [ ] 0-6 斷線監控
+- [x] 0-6 每日覆蓋率檢查，不足就自動開 Issue（`scripts/check_coverage.py`）
 
 資料收集中：[`data` 分支](https://github.com/Bryant0909/youbike-forecast/tree/data)
 · [執行紀錄](https://github.com/Bryant0909/youbike-forecast/actions)
