@@ -27,7 +27,7 @@
 ```
 SETUP.md       換電腦時怎麼還原
 .github/       GitHub Actions 排程（收集、壓縮、監控）
-scripts/       資料收集、壓縮、覆蓋率檢查
+scripts/       資料收集（YouBike／天氣）、壓縮、覆蓋率檢查
 src/youbike/   資料載入（data.py）、特徵工程、模型
 pyproject.toml  讓 import youbike 能用（pip install -e .）
 data/raw/      原始資料（不上傳 GitHub）
@@ -41,6 +41,7 @@ AI_LOG.md      AI 協作紀錄
 | 排程（台北時間） | 做什麼 | 程式 |
 |---|---|---|
 | 每 5 分鐘 | 抓一次全台北 1808 站的即時資料，存成 Parquet | `scripts/collect.py` |
+| 每 5 分鐘 | 抓一次中央氣象署自動氣象站觀測（每 10 分鐘更新，重複的會跳過） | `scripts/collect_weather.py` |
 | 每天 03:00 | 把前一天 288 個小檔壓成一個日檔（小 7 倍） | `scripts/compact.py` |
 | 每天 03:30 | 檢查覆蓋率／空隙／尖峰時段，不足就自動開 Issue 通知 | `scripts/check_coverage.py` |
 

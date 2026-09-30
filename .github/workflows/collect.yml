@@ -87,6 +87,23 @@ jobs:
         # 這樣不管 Actions 從哪個目錄執行都不會寫錯位置。
         run: python scripts/collect.py --out-dir "$GITHUB_WORKSPACE/data-branch"
 
+      - name: 抓一次天氣資料
+        # 【continue-on-error: true 是這一步的重點】
+        #
+        # 天氣是「附加」資料，YouBike 才是主角。如果氣象署掛掉、金鑰過期、
+        # 或回傳格式改了，絕對不能讓它害 YouBike 的資料也收不到 ——
+        # 那會是「為了次要的東西弄丟主要的東西」。
+        # 加了這一行，天氣失敗只會在紀錄裡留下黃色警告，
+        # 後面的推送照常進行，YouBike 的資料一樣會存下來。
+        #
+        # 氣象署每 10 分鐘才更新一次，所以每 5 分鐘執行會有大約一半
+        # 印出「跳過：這份觀測已經存過了」—— 那是正常的，不是錯誤。
+        continue-on-error: true
+        env:
+          # 值來自 repo 的 Settings -> Secrets and variables -> Actions
+          CWA_API_KEY: ${{ secrets.CWA_API_KEY }}
+        run: python scripts/collect_weather.py --out-dir "$GITHUB_WORKSPACE/data-branch"
+
       - name: 把新資料推回 data 分支
         # 推送的邏輯（commit 訊息、push 失敗重試）抽到 scripts/push_data.sh，
         # 跟 compact.yml 共用同一份，不會兩邊走鐘。
