@@ -1,0 +1,69 @@
+# phase 0-5：每天凌晨把前一天的 288 個小檔壓縮成一個日檔。
+#
+# ┌─ 這個 workflow 在做什麼 ───────────────────────────────────────────┐
+# │ 1. 取出 main 分支（程式）                                          │
+# │ 2. 取出 data 分支到 data-branch/                                   │
+# │ 3. 跑 scripts/compact.py：合併小檔 -> 核對 -> 才刪小檔             │
+# │ 4. 把結果 commit 並推回 data 分支                                  │
+# └────────────────────────────────────────────────────────────────────┘
+#
+# 實測效果：3.2 MB（288 個小檔）-> 456 KB（1 個日檔），小 7 倍，耗時約 7 秒。
+#
+# ⚠️ 這個 workflow 會「刪掉原始資料」，是整個專案唯一有破壞性的動作。
+#    所有的安全機制都寫在 scripts/compact.py 裡：先把新日檔讀回來核對
+#    筆數、欄位、時間點數量，全部對得上才刪小檔，任何一項對不上就中止。
+name: 壓縮前一天的資料
+
+on:
+  schedule:
+    # UTC 19:00 = 台北時間隔天凌晨 03:00。
+    # 為什麼選凌晨 3 點？因為要等「前一天」真的結束（台北時間過午夜）才能壓，
+    # 又想避開整點 —— 整點是全世界 cron 最擠的時候，延遲最嚴重。
+    - cron: "0 19 * * *"
+  # 讓你可以在 GitHub 網頁上手動跑一次（測試、或是補做失敗的那幾天）
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+# 跟 collect 用不同的 concurrency 群組，兩者可以同時跑。
+# 為什麼不怕撞到？因為 compact 動的是「以前」的檔案、collect 動的是「今天」的，
+# 路徑不重疊，push_data.sh 的 rebase 重試可以乾淨地處理。
+concurrency:
+  group: compact
+  cancel-in-progress: false
+
+jobs:
+  compact:
+    runs-on: ubuntu-latest
+    # 壓一天約 7 秒，但如果排程連續失敗好幾天、累積了一堆要壓，會久一點。
+    # 設 30 分鐘上限，足夠補做十幾天。
+    timeout-minutes: 30
+
+    steps:
+      - name: 取出程式（main 分支）
+        uses: actions/checkout@v7
+
+      - name: 取出資料分支（data）到 data-branch/
+        uses: actions/checkout@v7
+        with:
+          ref: data
+          path: data-branch
+          # 只要最新的檔案內容，不需要整個歷史
+          fetch-depth: 1
+
+      - name: 安裝 Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements-collect.txt
+
+      - name: 安裝套件
+        run: pip install -r requirements-collect.txt
+
+      - name: 壓縮（先核對才刪檔）
+        run: python scripts/compact.py --data-dir "$GITHUB_WORKSPACE/data-branch"
+
+      - name: 把結果推回 data 分支
+        run: bash scripts/push_data.sh compact "$GITHUB_WORKSPACE/data-branch"

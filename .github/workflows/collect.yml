@@ -74,42 +74,6 @@ jobs:
         run: python scripts/collect.py --out-dir "$GITHUB_WORKSPACE/data-branch"
 
       - name: 把新資料推回 data 分支
-        working-directory: data-branch
-        run: |
-          set -euo pipefail
-
-          # commit 的作者掛在 Actions 機器人名下，跟你自己手寫的 commit 分得開
-          git config user.name  "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          # 沒有新檔案就直接結束（代表來源還沒產生新資料，collect.py 跳過了）。
-          # 這不是錯誤，所以用 exit 0 正常結束。
-          if [ -z "$(git status --porcelain)" ]; then
-            echo "沒有新資料（來源還沒更新），這次不 commit"
-            exit 0
-          fi
-
-          git add -A
-          # commit 訊息裡放抓到的檔名，這樣在 GitHub 上看歷史一眼就知道是哪個時間點
-          NEW_FILES=$(git diff --cached --name-only --diff-filter=A | head -n 3 | tr '\n' ' ')
-          git commit -m "data: ${NEW_FILES:-update}"
-
-          # push 可能失敗：別的 job 剛好也推了東西上去（雖然 concurrency 已經擋掉大部分）。
-          # 失敗就把遠端的變更拉下來重新疊上去再試。每次都是新增不同檔名，所以不會衝突。
-          for i in 1 2 3 4 5; do
-            if git push origin HEAD:data; then
-              echo "推送成功"
-              exit 0
-            fi
-            echo "推送失敗（第 $i 次），拉取遠端後重試…"
-            git fetch origin data
-            if ! git rebase origin/data; then
-              git rebase --abort || true
-              echo "重疊失敗，放棄這次（資料只損失這 5 分鐘，下次會繼續）"
-              exit 1
-            fi
-            sleep $((i * 3))
-          done
-
-          echo "推送重試 5 次都失敗"
-          exit 1
+        # 推送的邏輯（commit 訊息、push 失敗重試）抽到 scripts/push_data.sh，
+        # 跟 compact.yml 共用同一份，不會兩邊走鐘。
+        run: bash scripts/push_data.sh data "$GITHUB_WORKSPACE/data-branch"
