@@ -7,3 +7,4 @@
 | 2026-09-29 | 專案整體討論、定下 phase 0 的技術決策 | 盤點現況；指出 Actions cron 會跳過執行、私有 repo 額度會爆、兩段式儲存的容量估算、不平衡問題不能看 accuracy；提出「收集範圍 ≠ 建模範圍」 | 選定兩段式 + repo data 分支、全台北都收但先建模一區；指出自己下班後沒網路，因此否決本機備援收集器（改為斷線監控） |
 | 2026-09-29 | 改 `CLAUDE.md` 工作方式 | 改寫成 phase 0-1 / 0-2 的步驟編號制 | 要求從「一次一個 phase」改成「一次一步」 |
 | 2026-09-29 | phase 0-1：確認 API 可用 | `scripts/check_api.py`（試兩個來源、印範例、列欄位、檢查資料新舊與行政區）+ 資料品質探查 | 待確認 |
+| 2026-09-30 | phase 0-4：GitHub Actions 每 5 分鐘排程 | 建 `data` 孤兒分支（用底層指令避開 `--orphan` 的刪檔風險）、`.github/workflows/collect.yml`（雙 checkout、concurrency、push 重試）、本機完整模擬驗證、指出 data 分支 git 歷史會膨脹約 97 MB/月 | 待確認 |

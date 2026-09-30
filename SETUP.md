@@ -149,8 +149,6 @@ python scripts/collect.py --dry-run
 
 ## 7. 取回累積的資料
 
-> ⏳ 這一節要等 phase 0-4 建好 `data` 分支之後才用得到。目前還沒有資料可以取。
-
 所有收集到的資料存在同一個 repo 的 **`data` 分支**（不是 `main`）。
 第 3 步的 `git clone` 其實已經把資料一起下載下來了，只是還沒「展開」。
 
@@ -228,5 +226,5 @@ python -m venv .venv && .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 cp .env.example .env          # 再自己填金鑰
 python scripts/collect.py --dry-run
-git worktree add data-branch data    # phase 0-4 之後才有
+git worktree add data-branch data    # 展開累積的資料
 ```

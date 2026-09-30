@@ -26,6 +26,7 @@
 
 ```
 SETUP.md       換電腦時怎麼還原
+.github/       GitHub Actions 排程（每 5 分鐘收集）
 scripts/       資料收集程式
 src/youbike/   特徵工程、模型
 data/raw/      原始資料（不上傳 GitHub）
@@ -41,6 +42,9 @@ AI_LOG.md      AI 協作紀錄
 - [x] 0-1 確認 data.taipei YouBike 2.0 即時 API 可用（1808 站）
 - [x] 0-2 建立 GitHub public repo
 - [x] 0-3 `scripts/collect.py` 收集程式
-- [ ] 0-4 GitHub Actions 每 5 分鐘排程
+- [x] 0-4 GitHub Actions 每 5 分鐘排程（`.github/workflows/collect.yml`）
 - [ ] 0-5 每日壓縮
 - [ ] 0-6 斷線監控
+
+資料收集中：[`data` 分支](https://github.com/Bryant0909/youbike-forecast/tree/data)
+· [執行紀錄](https://github.com/Bryant0909/youbike-forecast/actions)
