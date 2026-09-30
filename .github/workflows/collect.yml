@@ -23,6 +23,20 @@ on:
   schedule:
     # 每 5 分鐘。cron 的最小間隔就是 5 分鐘，比這更密 GitHub 不接受。
     - cron: "*/5 * * * *"
+
+  # 讓外部的排程服務可以「叫醒」這個 workflow。
+  #
+  # 為什麼需要這個？
+  #   GitHub 自己的排程器對這個 repo 極度不可靠（實測 6.5 小時只觸發 1 次）。
+  #   上面的 schedule 保留著 —— 它哪天恢復正常也不會有壞處，
+  #   concurrency 會確保兩邊同時來的時候不會打架。
+  #   這一行則讓外部服務可以用 GitHub API 直接點名叫它跑：
+  #     POST /repos/<owner>/<repo>/dispatches  {"event_type": "collect"}
+  #
+  # 在外部服務真的送出請求之前，加這一行不會改變任何現有行為。
+  repository_dispatch:
+    types: [collect]
+
   # 讓你可以在 GitHub 網頁上按按鈕手動跑一次（測試用，不用等排程）
   workflow_dispatch:
 

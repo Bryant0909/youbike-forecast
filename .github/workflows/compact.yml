@@ -20,6 +20,13 @@ on:
     # 為什麼選凌晨 3 點？因為要等「前一天」真的結束（台北時間過午夜）才能壓，
     # 又想避開整點 —— 整點是全世界 cron 最擠的時候，延遲最嚴重。
     - cron: "0 19 * * *"
+
+  # 外部排程服務的每日呼叫。compact 和 coverage 共用同一個 event_type，
+  # 這樣外部只需要設一個「每天一次」的工作，就能同時叫醒這兩個。
+  # （詳細原因見 collect.yml 裡的說明）
+  repository_dispatch:
+    types: [daily]
+
   # 讓你可以在 GitHub 網頁上手動跑一次（測試、或是補做失敗的那幾天）
   workflow_dispatch:
 

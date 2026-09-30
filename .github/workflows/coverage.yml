@@ -19,6 +19,12 @@ on:
     # 故意排在 compact（19:00）之後半小時，這樣壓縮已經做完，
     # 檢查的是最終狀態（不過程式兩種形式都讀得懂，順序顛倒也不會錯）。
     - cron: "30 19 * * *"
+
+  # 外部排程服務的每日呼叫（跟 compact 共用同一個 event_type）。
+  # 被這樣叫醒時沒有 date 輸入，所以會檢查「昨天」—— 正是我們要的。
+  repository_dispatch:
+    types: [daily]
+
   workflow_dispatch:
     inputs:
       date:
