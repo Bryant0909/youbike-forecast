@@ -1,0 +1,30 @@
+# TEMPORARY DIAGNOSTIC -- delete once the schedule question is settled.
+#
+# Why this file exists:
+#   collect.yml has a "*/5 * * * *" schedule that has produced ZERO scheduled
+#   runs in 6+ hours, while manual (workflow_dispatch) runs all succeed.
+#   Everything checked out: repo public, Actions enabled, workflow active,
+#   valid cron, no BOM, GitHub status green, account created 2024.
+#
+#   This file is deliberately the most boring workflow possible -- plain ASCII,
+#   no concurrency, no permissions, no checkout, a different interval -- so that
+#   whether IT fires tells us which of two things is true:
+#
+#     it fires      -> the scheduler works on this repo; something about
+#                      collect.yml (or the */5 interval) is the problem
+#     it never fires -> the scheduler is not running for this repo at all,
+#                      and we must trigger the collector from outside GitHub
+#
+# Once we have the answer, delete this file.
+name: heartbeat
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+jobs:
+  beat:
+    runs-on: ubuntu-latest
+    steps:
+      - run: date -u "+heartbeat %Y-%m-%dT%H:%M:%SZ"
