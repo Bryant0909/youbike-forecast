@@ -11,3 +11,4 @@
 | 2026-09-30 | phase 0-5：每日壓縮 | `scripts/compact.py`（四步式先核對才刪檔）、`scripts/push_data.sh`（抽出共用推送邏輯）、`.github/workflows/compact.yml`；用 288 個擬真檔量出真實壓縮率、用假的 origin 實測 push 競爭與 rebase 重試、用壞檔驗證中止行為；抓到 git 改名偵測導致 commit 訊息錯誤的 bug | 待確認 |
 | 2026-09-30 | phase 0-6：每日覆蓋率檢查與自動警報 | `scripts/check_coverage.py`（覆蓋率／最大連續空隙／尖峰時段／資料新鮮度／站數 五項檢查）、`.github/workflows/coverage.yml`（一個問題一個 Issue 串、恢復自動關閉）；指出 GitHub 預設通知設定會讓機器人開的 Issue 收不到 email，必須指派並 @ 本人；造了五種缺漏情境實測，其中「整天 89.9% 但尖峰只有 33%」證明了為什麼不能只看筆數 | 待確認 |
 | 2026-09-30 | 實測 phase 0-6 的通知管道、診斷排程未觸發 | 手動觸發 coverage 驗證兩條路徑（開新 Issue 含 @ 與指派、同問題改留言不重複開）；系統性排除排程問題（repo 設定、workflow 狀態、cron 語法、檔案 BOM、帳號年齡、GitHub 平台事故）後判斷是 GitHub 排程器尚未接手 | 選擇「先等並設檢查點」而不是立刻改架構 |
+| 2026-09-30 | phase 1-1：資料載入層 | `src/youbike/data.py`（自動找資料位置、吸收壓縮／未壓縮兩種形式、行政區篩選、時間欄位、去重、資料盤點報告）、`pyproject.toml`；指出用 5 個時間點做 EDA 沒有意義，phase 1 先只做載入層；造了時間戳記正確的三天測試資料實測，抓到 `available_days()` 因 `listdir` 排序而漏掉 100 個小檔的靜默資料遺失 bug，以及誤以為 `stations.parquet` 有 `total_docks` 欄位的錯 | 待確認 |

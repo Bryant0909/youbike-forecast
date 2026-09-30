@@ -124,6 +124,18 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
+然後把專案本身也裝起來（**只要做一次**）：
+
+```bash
+pip install -e .
+```
+
+這一步讓 `import youbike` 在任何地方都能用（notebook、scripts、測試）。
+`-e` 是「可編輯安裝」，它只在 Python 的搜尋路徑裡登記 `src/` 的位置，不會複製程式碼 ——
+所以你改了 `src/youbike/*.py` 之後不用重裝，馬上生效。
+
+> 💡 沒做這一步的話，notebook 裡 `import youbike` 會說找不到模組。
+
 > 之後每次要工作，都要先啟用 venv。忘記啟用的話會出現「找不到模組」的錯誤。
 
 ---
@@ -224,6 +236,7 @@ git clone https://github.com/Bryant0909/youbike-forecast.git
 cd youbike-forecast
 python -m venv .venv && .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
+pip install -e .
 cp .env.example .env          # 再自己填金鑰
 python scripts/collect.py --dry-run
 git worktree add data-branch data    # 展開累積的資料

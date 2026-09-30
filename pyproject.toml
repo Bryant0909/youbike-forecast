@@ -1,0 +1,25 @@
+# 讓 `import youbike` 在任何地方都能用（notebook、scripts、測試）。
+#
+# 為什麼需要這個檔？
+#   因為 youbike 這個套件放在 src/ 底下，Python 預設找不到它。
+#   沒有這個檔的話，每個 notebook 開頭都得寫 sys.path.insert(...) 這種
+#   「在我電腦上能跑」的路徑 hack —— 換個資料夾位置就壞掉。
+#
+# 用法（只要做一次）：
+#   pip install -e .
+#
+# -e 是「可編輯安裝」：它只是在 Python 的搜尋路徑裡登記 src/ 的位置，
+# 不會複製程式碼。所以你改了 src/youbike/*.py 之後不用重裝，馬上生效。
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "youbike-forecast"
+version = "0.1.0"
+description = "預測台北 YouBike 站點 30 分鐘後會不會借不到車"
+requires-python = ">=3.11"
+
+[tool.setuptools.packages.find]
+where = ["src"]

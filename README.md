@@ -28,7 +28,8 @@
 SETUP.md       換電腦時怎麼還原
 .github/       GitHub Actions 排程（收集、壓縮、監控）
 scripts/       資料收集、壓縮、覆蓋率檢查
-src/youbike/   特徵工程、模型
+src/youbike/   資料載入（data.py）、特徵工程、模型
+pyproject.toml  讓 import youbike 能用（pip install -e .）
 data/raw/      原始資料（不上傳 GitHub）
 notebooks/     EDA 與實驗
 docs/          設計決策
