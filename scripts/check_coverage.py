@@ -28,6 +28,7 @@ phase 0-6：每日資料覆蓋率檢查 —— 對付「靜默失敗」。
 """
 
 import argparse
+import math
 import os
 import re
 import sys
@@ -142,6 +143,41 @@ def fmt_clock(t, date_str):
     return "{:%H:%M}".format(t)
 
 
+def day_bounds(date_str):
+    """
+    這一天的「起點」和「該算到哪為止」，以及它是不是還沒過完。
+
+    【為什麼需要這個】
+    如果拿今天來檢查，一天當然還沒過完 —— 現在是早上 9 點的話，
+    9 點到午夜當然沒有資料。若照整天 288 個時間點去算，就會報出
+    「覆蓋率 37%」「空了 890 分鐘」「傍晚尖峰 0%」這種嚇人但毫無意義的數字。
+    那不是缺漏，是未來還沒發生。
+
+    所以檢查今天時，一律只算到「現在」為止。
+    排程跑的是昨天（已經過完），走的是另一條路，行為完全不變。
+    """
+    day_start = datetime.strptime(date_str, "%Y-%m-%d").replace(tzinfo=TAIPEI_TZ)
+    midnight = day_start + timedelta(days=1)
+    now = datetime.now(TAIPEI_TZ)
+    if now < midnight:
+        # 這一天還沒過完（通常就是「今天」）
+        return day_start, max(now, day_start), True
+    return day_start, midnight, False
+
+
+def expected_points(day_start, day_end):
+    """
+    從起點到終點之間理論上該有幾個取樣點。
+
+    用【無條件進位】而不是無條件捨去，因為取樣點包含起點：
+      07:00 ~ 09:14（134 分鐘）的取樣點是 07:00, 07:05, …, 09:10，共 27 個，
+      而 134 // 5 = 26 會少算一個，算出來的覆蓋率就會超過 100%（看起來很蠢）。
+    整天的情況兩種算法一樣（1440 / 5 = 288），所以不會影響排程跑的昨日報告。
+    """
+    minutes = (day_end - day_start).total_seconds() / 60.0
+    return max(1, int(math.ceil(minutes / INTERVAL_MIN)))
+
+
 def find_gaps(local_times, date_str):
     """
     找出這一天所有的「空隙」。
@@ -149,11 +185,12 @@ def find_gaps(local_times, date_str):
     空隙的定義：兩個相鄰時間點之間超過預期間隔（5 分鐘）的部分。
     一天的頭尾也算 —— 如果第一筆是早上 9 點，那 00:00~09:00 就是一個 9 小時的空隙，
     這種情況如果不算頭尾就會完全看不見。
-    """
-    day_start = datetime.strptime(date_str, "%Y-%m-%d").replace(tzinfo=TAIPEI_TZ)
-    day_end = day_start + timedelta(days=1)
 
-    marks = [day_start] + local_times + [day_end]
+    如果這一天還沒過完，結尾只算到「現在」（理由見 day_bounds）。
+    """
+    day_start, day_end, _ = day_bounds(date_str)
+
+    marks = [day_start] + [t for t in local_times if t <= day_end] + [day_end]
     gaps = []
     for a, b in zip(marks, marks[1:]):
         minutes = (b - a).total_seconds() / 60.0
@@ -165,12 +202,32 @@ def find_gaps(local_times, date_str):
 
 
 def peak_coverage(local_times, date_str):
-    """分別算每個尖峰時段的覆蓋率。"""
+    """
+    分別算每個尖峰時段的覆蓋率。
+
+    回傳每個時段的 (標籤, 起時, 迄時, 實得, 應得, 覆蓋率, 狀態)。
+    狀態有三種：
+      "done"     這個時段已經完整過完 —— 數字可以直接拿來判斷
+      "partial"  正在進行中 —— 只跟「已經過的部分」比
+      "future"   還沒到 —— 不算覆蓋率，也不該算成問題
+    這三種分開，是為了不要把「還沒發生」誤報成「漏收」。
+    """
+    day_start, day_end, _ = day_bounds(date_str)
     out = []
     for label, h_from, h_to in PEAK_WINDOWS:
-        expected = (h_to - h_from) * 60 // INTERVAL_MIN
-        got = sum(1 for t in local_times if h_from <= t.hour < h_to)
-        out.append((label, h_from, h_to, got, expected, got / expected if expected else 0))
+        w_start = day_start + timedelta(hours=h_from)
+        w_end = day_start + timedelta(hours=h_to)
+        effective_end = min(w_end, day_end)
+
+        if effective_end <= w_start:
+            out.append((label, h_from, h_to, 0, 0, 0.0, "future"))
+            continue
+
+        expected = expected_points(w_start, effective_end)
+        got = sum(1 for t in local_times if w_start <= t < effective_end)
+        state = "done" if effective_end >= w_end else "partial"
+        out.append((label, h_from, h_to, got, expected,
+                    got / expected if expected else 0.0, state))
     return out
 
 
@@ -224,19 +281,28 @@ def build_report(date_str, snap_dir, check_freshness):
         lines.append("請檢查 [Actions 執行紀錄](../../actions/workflows/collect.yml)。")
         return problems, "\n".join(lines)
 
-    n = len(local_times)
-    coverage = n / EXPECTED_PER_DAY
+    day_start, day_end, partial = day_bounds(date_str)
+    expected = expected_points(day_start, day_end)
+    # 這一天還沒過完的話只算到「現在」為止（理由見 day_bounds）
+    n = sum(1 for t in local_times if t <= day_end)
+    coverage = n / expected
 
-    # --- 1. 整天覆蓋率 ---
+    if partial:
+        lines.append("> ⏳ **{} 還沒過完**，以下只統計到 {:%H:%M} 為止（{} 個時間點）。"
+                     .format(date_str, day_end, expected))
+        lines.append("")
+
+    # --- 1. 覆蓋率 ---
     ok = "✅" if coverage >= MIN_COVERAGE else "❌"
     lines.append("| 項目 | 數值 | 門檻 | |")
     lines.append("|---|---|---|---|")
-    lines.append("| 時間點數 | {} / {} | — | |".format(n, EXPECTED_PER_DAY))
+    lines.append("| 時間點數 | {} / {}{} | — | |".format(
+        n, expected, "（到目前為止）" if partial else ""))
     lines.append("| 覆蓋率 | **{:.1f}%** | ≥ {:.0f}% | {} |".format(
         coverage * 100, MIN_COVERAGE * 100, ok))
     if coverage < MIN_COVERAGE:
         problems.append("覆蓋率只有 {:.1f}%（門檻 {:.0f}%），{} 個時間點裡缺了 {} 個".format(
-            coverage * 100, MIN_COVERAGE * 100, EXPECTED_PER_DAY, EXPECTED_PER_DAY - n))
+            coverage * 100, MIN_COVERAGE * 100, expected, expected - n))
 
     # --- 2. 最大連續空隙 ---
     gaps = find_gaps(local_times, date_str)
@@ -283,13 +349,19 @@ def build_report(date_str, snap_dir, check_freshness):
     lines.append("")
     lines.append("| 時段 | 時間點數 | 覆蓋率 | |")
     lines.append("|---|---|---|---|")
-    for label, h_from, h_to, got, expected, cov in peak_coverage(local_times, date_str):
+    for label, h_from, h_to, got, exp_pk, cov, state in peak_coverage(local_times, date_str):
+        if state == "future":
+            # 還沒到的時段不算覆蓋率，更不該算成問題 —— 它不是漏收，是還沒發生
+            lines.append("| {}（{:02d}:00-{:02d}:00） | — | — | ⏳ 還沒到 |".format(
+                label, h_from, h_to))
+            continue
+        note = "（進行中）" if state == "partial" else ""
         ok = "✅" if cov >= MIN_PEAK_COVERAGE else "❌"
-        lines.append("| {}（{:02d}:00-{:02d}:00） | {} / {} | **{:.0f}%** | {} |".format(
-            label, h_from, h_to, got, expected, cov * 100, ok))
+        lines.append("| {}（{:02d}:00-{:02d}:00）{} | {} / {} | **{:.0f}%** | {} |".format(
+            label, h_from, h_to, note, got, exp_pk, cov * 100, ok))
         if cov < MIN_PEAK_COVERAGE:
-            problems.append("{}（{:02d}:00-{:02d}:00）覆蓋率只有 {:.0f}%，{} 個時間點裡缺了 {} 個".format(
-                label, h_from, h_to, cov * 100, expected, expected - got))
+            problems.append("{}（{:02d}:00-{:02d}:00）{}覆蓋率只有 {:.0f}%，{} 個時間點裡缺了 {} 個".format(
+                label, h_from, h_to, note, cov * 100, exp_pk, exp_pk - got))
     lines.append("")
 
     # --- 6. 其他資訊（不設門檻，只是給你參考）---
