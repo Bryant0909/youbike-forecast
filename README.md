@@ -42,8 +42,8 @@ AI_LOG.md      AI 協作紀錄
 |---|---|---|
 | 每 5 分鐘 | 抓一次全台北 1808 站的即時資料，存成 Parquet | `scripts/collect.py` |
 | 每 5 分鐘 | 抓一次中央氣象署自動氣象站觀測（每 10 分鐘更新，重複的會跳過） | `scripts/collect_weather.py` |
-| 每天 03:00 | 把前一天 288 個小檔壓成一個日檔（小 7 倍） | `scripts/compact.py` |
-| 每天 03:30 | 檢查覆蓋率／空隙／尖峰時段，不足就自動開 Issue 通知 | `scripts/check_coverage.py` |
+| 每天 03:00 | 把前一天的小檔壓成日檔（YouBike 小 7 倍、天氣小 6 倍） | `scripts/compact.py` |
+| 每天 03:30 | 檢查覆蓋率／空隙／尖峰時段／天氣，不足就自動開 Issue 通知 | `scripts/check_coverage.py` |
 
 資料存在 [`data` 分支](https://github.com/Bryant0909/youbike-forecast/tree/data)，
 程式和資料的 commit 歷史完全分開。

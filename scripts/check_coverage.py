@@ -73,6 +73,16 @@ MAX_DATA_AGE_HOURS = 2
 # 一份正常的資料應該有多少站。少太多代表 API 回傳的資料不完整。
 MIN_STATIONS = 1000
 
+# ---------------------------------------------------------------------------
+# 天氣（中央氣象署自動氣象站，每 10 分鐘更新一次）
+# ---------------------------------------------------------------------------
+# 天氣是「附加」資料，YouBike 才是主角，所以門檻訂得比較鬆（80% vs 90%）。
+# 但還是要監控 —— 天氣的歷史觀測一樣補不回來，靜默斷掉三個星期
+# 跟 YouBike 斷掉一樣無法挽回。
+WEATHER_PER_DAY = 144          # 24 小時 ÷ 10 分鐘
+MIN_WEATHER_COVERAGE = 0.80
+MIN_WEATHER_STATIONS = 200
+
 
 def log(msg):
     print(msg, flush=True)
@@ -90,13 +100,16 @@ def parse_snap_name(name):
     return datetime.strptime(m.group(1), "%Y%m%dT%H%M%S").replace(tzinfo=TAIPEI_TZ)
 
 
-def load_day(snap_dir, date_str):
+def load_day(snap_dir, date_str, time_col="src_time"):
     """
     讀出某一天的資料，回傳 (每個時間點的台北時間清單, 總筆數, 站數, 延遲秒數清單)。
 
     要同時支援兩種形式，因為壓縮（phase 0-5）是每天凌晨才做的：
       - 已壓縮：snapshots/2026-09-30.parquet
       - 未壓縮：snapshots/2026-09-30/*.parquet（一堆小檔）
+
+    time_col 讓同一段邏輯也能用在天氣資料上 ——
+    YouBike 的時間欄位叫 src_time，天氣的叫 obs_time，其餘完全一樣。
     """
     day_file = os.path.join(snap_dir, date_str + ".parquet")
     day_dir = os.path.join(snap_dir, date_str)
@@ -118,12 +131,12 @@ def load_day(snap_dir, date_str):
     rows = 0
     for p in paths:
         # 只讀需要的三個欄位。整天 52 萬列，全欄位讀進來很浪費。
-        t = pq.read_table(p, columns=["src_time", "fetched_at", "station_id"])
+        t = pq.read_table(p, columns=[time_col, "fetched_at", "station_id"])
         rows += t.num_rows
-        src = t.column("src_time").to_pylist()
+        src = t.column(time_col).to_pylist()
         fet = t.column("fetched_at").to_pylist()
         stations.update(t.column("station_id").to_pylist())
-        # 同一個檔裡每列的 src_time 都一樣，所以用 set 收集不同的值就好
+        # 同一個檔裡每列的時間值都一樣，所以用 set 收集不同的值就好
         for s, f in zip(src, fet):
             if s not in times:
                 times.add(s)
@@ -259,7 +272,63 @@ def newest_sample(snap_dir):
     return max(t.column("src_time").to_pylist()).astimezone(TAIPEI_TZ)
 
 
-def build_report(date_str, snap_dir, check_freshness):
+def check_weather(data_dir, date_str, lines, problems):
+    """
+    檢查天氣資料的覆蓋率。
+
+    刻意做得比 YouBike 那套簡單：只看「收到幾個時間點」和「幾個測站」。
+    不看空隙、不分尖峰 —— 天氣是慢變數，少一兩筆沒什麼影響，
+    真正要防的是「整個斷掉而沒人發現」。
+    """
+    weather_dir = os.path.join(data_dir, "weather")
+    lines.append("### 天氣資料（中央氣象署自動氣象站）")
+    lines.append("")
+
+    if not os.path.isdir(weather_dir):
+        lines.append("（還沒有天氣資料夾，略過）")
+        lines.append("")
+        return
+
+    times, rows, n_st, _, form = load_day(weather_dir, date_str, time_col="obs_time")
+
+    if not times:
+        lines.append("| 項目 | 數值 | 門檻 | |")
+        lines.append("|---|---|---|---|")
+        lines.append("| 時間點數 | **0** | — | ❌ |")
+        lines.append("")
+        problems.append("**完全沒有 {} 的天氣資料** —— 氣象署金鑰可能過期，或 API 改了".format(date_str))
+        return
+
+    # 天氣只在「這一天已經過完」時才用整天的 144 當分母；
+    # 還沒過完就按比例縮放（跟 YouBike 那邊同樣的道理）。
+    day_start, day_end, partial = day_bounds(date_str)
+    minutes = (day_end - day_start).total_seconds() / 60.0
+    expected = max(1, int(math.ceil(minutes / 10.0)))   # 天氣是每 10 分鐘
+    n = sum(1 for t in times if t <= day_end)
+    cov = n / expected
+
+    ok = "✅" if cov >= MIN_WEATHER_COVERAGE else "❌"
+    ok_st = "✅" if n_st >= MIN_WEATHER_STATIONS else "❌"
+    lines.append("| 項目 | 數值 | 門檻 | |")
+    lines.append("|---|---|---|---|")
+    lines.append("| 時間點數 | {} / {}{} | — | |".format(
+        n, expected, "（到目前為止）" if partial else ""))
+    lines.append("| 覆蓋率 | **{:.1f}%** | ≥ {:.0f}% | {} |".format(
+        cov * 100, MIN_WEATHER_COVERAGE * 100, ok))
+    lines.append("| 測站數 | {} | ≥ {} | {} |".format(n_st, MIN_WEATHER_STATIONS, ok_st))
+    lines.append("")
+    lines.append("- 儲存形式：{}　總筆數：{:,}".format(form, rows))
+    lines.append("")
+
+    if cov < MIN_WEATHER_COVERAGE:
+        problems.append("天氣資料覆蓋率只有 {:.1f}%（門檻 {:.0f}%），{} 個時間點裡缺了 {} 個".format(
+            cov * 100, MIN_WEATHER_COVERAGE * 100, expected, expected - n))
+    if n_st < MIN_WEATHER_STATIONS:
+        problems.append("天氣只有 {} 個測站（門檻 {}），氣象署回傳的資料可能不完整".format(
+            n_st, MIN_WEATHER_STATIONS))
+
+
+def build_report(date_str, data_dir, check_freshness):
     """
     做出報告，回傳 (problems, markdown)。
 
@@ -267,6 +336,7 @@ def build_report(date_str, snap_dir, check_freshness):
     markdown 是給人看的報告 —— 同一份內容會印在 Actions 的紀錄裡，
     也會在有問題時變成 GitHub Issue 的內容。
     """
+    snap_dir = os.path.join(data_dir, "snapshots")
     local_times, rows, n_stations, lags, form = load_day(snap_dir, date_str)
     problems = []
     lines = []
@@ -364,7 +434,10 @@ def build_report(date_str, snap_dir, check_freshness):
                 label, h_from, h_to, note, cov * 100, exp_pk, exp_pk - got))
     lines.append("")
 
-    # --- 6. 其他資訊（不設門檻，只是給你參考）---
+    # --- 6. 天氣資料 ---
+    check_weather(data_dir, date_str, lines, problems)
+
+    # --- 7. 其他資訊（不設門檻，只是給你參考）---
     lines.append("### 其他")
     lines.append("")
     lines.append("- 儲存形式：{}".format(form))
@@ -391,11 +464,11 @@ def main():
     args = ap.parse_args()
 
     date_str = args.date or yesterday_taipei()
-    snap_dir = os.path.join(args.data_dir, "snapshots")
+    snap_dir = os.path.join(args.data_dir, "snapshots")  # 只為了下面印訊息用
 
     # 「資料新鮮度」只有在檢查昨天/今天時才算是問題（理由見 build_report 裡的註解）
     check_freshness = date_str >= yesterday_taipei()
-    problems, report = build_report(date_str, snap_dir, check_freshness)
+    problems, report = build_report(date_str, args.data_dir, check_freshness)
 
     if problems:
         body = ["⚠️ **{} 的資料收集有問題**，共 {} 項：".format(date_str, len(problems)), ""]

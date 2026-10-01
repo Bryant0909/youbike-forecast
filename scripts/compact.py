@@ -1,5 +1,5 @@
 """
-phase 0-5：把每 5 分鐘的小 Parquet 檔壓縮成一個「日檔」。
+phase 0-5／A：把小 Parquet 檔壓縮成「日檔」（YouBike 快照 + 天氣觀測）。
 
 為什麼要做這件事？
     收集程式每 5 分鐘寫一個小檔，一天 288 個。三個月後就是 26000 個檔案 ——
@@ -44,17 +44,40 @@ DEFAULT_DATA_DIR = os.path.join(REPO_ROOT, "data", "raw")
 
 DATE_DIR_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
-# 這份清單必須跟 collect.py 的 SNAPSHOT_SCHEMA 一致。
-# 如果哪天改了 collect.py 的欄位，這裡對不上就會中止 —— 這是刻意的，
-# 寧可壓縮失敗讓你發現，也不要默默合併出一個欄位錯亂的檔案。
-EXPECTED_COLUMNS = [
-    "station_id", "is_active", "total_docks",
-    "bikes_available", "docks_available", "src_time", "fetched_at",
-]
-
-# 一天理論上有 288 個時間點（24 小時 ÷ 5 分鐘）。
-# 少於這個數不算錯誤（GitHub 排程本來就會跳過幾次），只是印出來讓你知道。
-EXPECTED_PER_DAY = 288
+# ---------------------------------------------------------------------------
+# 要壓縮哪些資料集
+# ---------------------------------------------------------------------------
+#
+# 現在有兩種資料要壓：YouBike 快照（每 5 分鐘）和天氣觀測（每 10 分鐘）。
+# 它們的壓縮邏輯一模一樣，只有「欄位、時間欄位名稱、一天幾筆」不同，
+# 所以把差異抽成下面這份規格，流程只寫一次。
+#
+# 【columns 必須跟對應的收集程式完全一致】
+#   對不上就會中止 —— 這是刻意的。寧可壓縮失敗讓你發現，
+#   也不要默默合併出一個欄位錯亂的檔案。
+DATASETS = {
+    "snapshots": {
+        "label": "YouBike 快照",
+        "time_col": "src_time",      # 這個欄位的「不同值數量」應該等於小檔數量
+        "per_day": 288,              # 24 小時 ÷ 5 分鐘
+        # 必須跟 collect.py 的 SNAPSHOT_SCHEMA 一致
+        "columns": [
+            "station_id", "is_active", "total_docks",
+            "bikes_available", "docks_available", "src_time", "fetched_at",
+        ],
+    },
+    "weather": {
+        "label": "天氣觀測",
+        "time_col": "obs_time",
+        "per_day": 144,              # 24 小時 ÷ 10 分鐘（氣象署的更新頻率）
+        # 必須跟 collect_weather.py 的 SNAPSHOT_SCHEMA 一致
+        "columns": [
+            "station_id", "temp_c", "humidity_pct", "pressure_hpa",
+            "wind_speed_ms", "wind_dir_deg", "gust_ms", "precip_mm",
+            "uv_index", "sunshine", "weather", "obs_time", "fetched_at",
+        ],
+    },
+}
 
 
 def log(msg):
@@ -107,14 +130,14 @@ def find_pending_days(snap_dir, only_date=None):
     return days
 
 
-def compact_day(date_str, day_dir, filenames, snap_dir, dry_run, keep_small):
+def compact_day(date_str, day_dir, filenames, snap_dir, spec, dry_run, keep_small):
     """壓縮某一天。回傳 True 代表成功。"""
     out_path = os.path.join(snap_dir, date_str + ".parquet")
     paths = [os.path.join(day_dir, f) for f in filenames]
 
     log("--- {}：{} 個小檔（一天理論上 {} 個，覆蓋率 {:.0f}%）".format(
-        date_str, len(paths), EXPECTED_PER_DAY,
-        100.0 * len(paths) / EXPECTED_PER_DAY))
+        date_str, len(paths), spec["per_day"],
+        100.0 * len(paths) / spec["per_day"]))
 
     # 【步驟 1】讀進所有小檔
     tables = []
@@ -125,9 +148,9 @@ def compact_day(date_str, day_dir, filenames, snap_dir, dry_run, keep_small):
             log("  中止：{} 讀不起來（{}: {}）".format(rel(p), type(e).__name__, e))
             log("  小檔一個都沒刪，請先處理這個壞檔再重跑")
             return False
-        if t.column_names != EXPECTED_COLUMNS:
+        if t.column_names != spec["columns"]:
             log("  中止：{} 的欄位跟預期不符".format(rel(p)))
-            log("    預期：{}".format(EXPECTED_COLUMNS))
+            log("    預期：{}".format(spec["columns"]))
             log("    實際：{}".format(t.column_names))
             return False
         tables.append(t)
@@ -157,12 +180,13 @@ def compact_day(date_str, day_dir, filenames, snap_dir, dry_run, keep_small):
     # 同一站的資料排在一起讀起來快很多。
     # 附帶好處：同一站連續時間點的車輛數很接近，Parquet 壓縮這種
     # 連續相似值特別有效，檔案會更小。
-    merged = merged.sort_by([("station_id", "ascending"), ("src_time", "ascending")])
+    merged = merged.sort_by([("station_id", "ascending"),
+                             (spec["time_col"], "ascending")])
 
-    # 每個小檔裡的 src_time 都是同一個值（整份資料一起更新），
-    # 所以「不同 src_time 的數量」應該剛好等於小檔的數量。
+    # 每個小檔裡的時間欄位都是同一個值（整份資料一起更新），
+    # 所以「不同時間值的數量」應該剛好等於小檔的數量。
     # 這是一個很強的完整性檢查：對不上就代表有檔案內容不對。
-    distinct_src = len(set(merged.column("src_time").to_pylist()))
+    distinct_src = len(set(merged.column(spec["time_col"]).to_pylist()))
     if distinct_src != len(paths):
         log("  警告：{} 個小檔但只有 {} 個不同的時間點".format(len(paths), distinct_src))
 
@@ -186,9 +210,9 @@ def compact_day(date_str, day_dir, filenames, snap_dir, dry_run, keep_small):
     problems = []
     if check.num_rows != rows_before:
         problems.append("筆數 {} != 小檔總和 {}".format(check.num_rows, rows_before))
-    if check.column_names != EXPECTED_COLUMNS:
+    if check.column_names != spec["columns"]:
         problems.append("欄位不符：{}".format(check.column_names))
-    check_distinct = len(set(check.column("src_time").to_pylist()))
+    check_distinct = len(set(check.column(spec["time_col"]).to_pylist()))
     if check_distinct != distinct_src:
         problems.append("時間點數量 {} != 合併前的 {}".format(check_distinct, distinct_src))
 
@@ -216,33 +240,54 @@ def compact_day(date_str, day_dir, filenames, snap_dir, dry_run, keep_small):
     return True
 
 
+def compact_dataset(name, spec, data_dir, only_date, dry_run, keep_small):
+    """壓縮一個資料集（snapshots 或 weather）。回傳失敗的日期清單。"""
+    root = os.path.join(data_dir, name)
+    log("")
+    log("### {}（{}/）".format(spec["label"], name))
+
+    if not os.path.isdir(root):
+        log("  沒有這個資料夾，跳過（還沒開始收集這種資料就會這樣）")
+        return []
+
+    days = find_pending_days(root, only_date)
+    if not days:
+        log("  沒有需要壓縮的日子（正常，代表該壓的都壓過了）")
+        return []
+
+    log("  要壓縮 {} 天：{}".format(len(days), ", ".join(d[0] for d in days)))
+
+    failed = []
+    for date_str, day_dir, filenames in days:
+        if not compact_day(date_str, day_dir, filenames, root, spec,
+                           dry_run, keep_small):
+            failed.append("{}/{}".format(name, date_str))
+    return failed
+
+
 def main():
-    ap = argparse.ArgumentParser(description="把每 5 分鐘的小 Parquet 壓縮成日檔")
+    ap = argparse.ArgumentParser(description="把小 Parquet 壓縮成日檔")
     ap.add_argument("--data-dir", default=DEFAULT_DATA_DIR,
                     help="資料資料夾，就是 collect.py 的 --out-dir 那一個（預設 data/raw）")
     ap.add_argument("--date", help="只壓指定的一天，格式 YYYY-MM-DD（可含今天，測試用）")
+    ap.add_argument("--dataset", choices=sorted(DATASETS),
+                    help="只壓某一種資料（預設兩種都壓）")
     ap.add_argument("--dry-run", action="store_true", help="只檢查，不寫檔也不刪檔")
     ap.add_argument("--keep-small", action="store_true", help="壓完保留小檔")
     args = ap.parse_args()
 
-    snap_dir = os.path.join(args.data_dir, "snapshots")
-    log("資料資料夾：" + rel(snap_dir))
+    log("資料資料夾：" + rel(args.data_dir))
 
-    days = find_pending_days(snap_dir, args.date)
-    if not days:
-        log("沒有需要壓縮的日子（正常，代表該壓的都壓過了）")
-        return 0
-
-    log("要壓縮 {} 天：{}".format(len(days), ", ".join(d[0] for d in days)))
-
+    names = [args.dataset] if args.dataset else sorted(DATASETS)
     failed = []
-    for date_str, day_dir, filenames in days:
-        if not compact_day(date_str, day_dir, filenames, snap_dir,
-                           args.dry_run, args.keep_small):
-            failed.append(date_str)
+    for name in names:
+        # 一個資料集失敗不影響另一個 —— 天氣壓縮出問題不該擋住 YouBike 的壓縮
+        failed += compact_dataset(name, DATASETS[name], args.data_dir,
+                                  args.date, args.dry_run, args.keep_small)
 
+    log("")
     if failed:
-        log("有 {} 天壓縮失敗：{}".format(len(failed), ", ".join(failed)))
+        log("有 {} 項壓縮失敗：{}".format(len(failed), ", ".join(failed)))
         return 1
 
     log("全部完成")
