@@ -23,7 +23,8 @@ on:
 
   # 外部排程服務的每日呼叫。compact 和 coverage 共用同一個 event_type，
   # 這樣外部只需要設一個「每天一次」的工作，就能同時叫醒這兩個。
-  # （詳細原因見 collect.yml 裡的說明）
+  # （2026-10-06 起收集改走外部服務打 workflow_dispatch；這兩支每日工作的
+  #   schedule 雖然常延遲 2~5 小時但每天都有跑到，所以先不動。見 docs/DECISIONS.md）
   repository_dispatch:
     types: [daily]
 

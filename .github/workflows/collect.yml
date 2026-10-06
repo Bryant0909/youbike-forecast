@@ -1,21 +1,25 @@
-# YouBike + 天氣資料收集：每次被叫醒就連續工作 5.5 小時。
+# YouBike + 天氣資料收集：外部排程服務每 5 分鐘叫一次，每次收一輪就結束。
 #
-# ┌─ 為什麼是「連續工作 5.5 小時」而不是「每 5 分鐘跑一次 40 秒」？ ───┐
-# │ 因為 GitHub 的排程器對這個 repo 幾乎不運作 —— 實測 7.5 小時只     │
-# │ 觸發 1 次（照 */5 應該要約 90 次）。用一個最陽春的心跳 workflow   │
-# │ 做對照實驗也是 0 次，確認問題不在我們的檔案而在排程器本身。       │
+# ┌─ 為什麼不用 GitHub 自己的排程（schedule / cron）？ ────────────────┐
+# │ GitHub 的排程器對這個 repo 幾乎不運作 —— 實測 7.5 小時只觸發 1 次  │
+# │（照 */5 應該要約 90 次），心跳對照實驗也是 0 次。                   │
 # │                                                                    │
-# │ 既然叫不醒，就反過來設計：被叫醒一次就做很久。                     │
-# │ 一次執行裡自己每 5 分鐘收一次，連續 5.5 小時（GitHub 單次工作      │
-# │ 上限 6 小時），所以排程器一天只要叫醒 4~5 次就有接近完整的覆蓋率。 │
+# │ 9/30 ~ 10/6 曾改成「被叫醒一次就連續工作 5.5 小時」來硬撐，        │
+# │ 平常覆蓋率有 98% 以上，但兩次長迴圈之間只要排程沒接上就會開天窗：  │
+# │ 10/6 凌晨 03:55 ~ 09:29 整整 334 分鐘沒資料，早上尖峰只剩 19%。    │
 # │                                                                    │
-# │ 代價：runner 會被長時間佔用（原設計一天約 3.2 小時）。公開 repo    │
-# │ 免費無上限，但這確實是比較重的用法。                               │
-# │                                                                    │
-# │ 【之後想換回輕量做法】改用外部服務每 5 分鐘打一次                  │
-# │   POST /repos/<owner>/<repo>/dispatches  {"event_type":"collect"}  │
-# │ 然後把下面的「收集迴圈」那一步換成單次執行即可（見 git 歷史）。    │
+# │ 所以改由外部服務（cron-job.org）每 5 分鐘打一次 GitHub API：        │
+# │   POST /repos/Bryant0909/youbike-forecast/actions/workflows/       │
+# │        collect.yml/dispatches        body: {"ref": "main"}         │
+# │ 這會觸發下面的 workflow_dispatch。就算某一次 GitHub 沒派到機器，    │
+# │ 也只損失那 5 分鐘，下一次照樣會來 —— 不會再一斷好幾個小時。        │
 # └────────────────────────────────────────────────────────────────────┘
+#
+# 為什麼用 workflow_dispatch 而不是 repository_dispatch？
+#   兩個都能從外部叫醒 workflow，差別在「token 需要什麼權限」：
+#     - repository_dispatch 要 Contents 寫入權限 = 這把 token 也能改程式碼、推 commit
+#     - workflow_dispatch   只要 Actions 寫入權限 = 只能觸發／取消 workflow
+#   token 是放在外部服務上的，萬一外洩，權限越小損害越小，所以選後者。
 #
 # 為什麼要「兩個 checkout」？
 #   程式在 main、資料在 data，是兩個沒有共同歷史的分支。
@@ -23,24 +27,13 @@
 name: 收集 YouBike 資料
 
 on:
-  schedule:
-    # 每 5 分鐘。cron 的最小間隔就是 5 分鐘，比這更密 GitHub 不接受。
-    - cron: "*/5 * * * *"
-
-  # 讓外部的排程服務可以「叫醒」這個 workflow。
+  # 外部服務叫醒它，以及你在 GitHub 網頁上按按鈕手動跑一次（測試用）都走這個。
   #
-  # 為什麼需要這個？
-  #   GitHub 自己的排程器對這個 repo 極度不可靠（實測 6.5 小時只觸發 1 次）。
-  #   上面的 schedule 保留著 —— 它哪天恢復正常也不會有壞處，
-  #   concurrency 會確保兩邊同時來的時候不會打架。
-  #   這一行則讓外部服務可以用 GitHub API 直接點名叫它跑：
-  #     POST /repos/<owner>/<repo>/dispatches  {"event_type": "collect"}
-  #
-  # 在外部服務真的送出請求之前，加這一行不會改變任何現有行為。
-  repository_dispatch:
-    types: [collect]
-
-  # 讓你可以在 GitHub 網頁上按按鈕手動跑一次（測試用，不用等排程）
+  # 【刻意拿掉 schedule】
+  #   它一天只會零星觸發幾次，留著只會在固定的 5 分鐘節奏之外多插幾筆
+  #   不規則的取樣，讓時間序列變亂，卻補不了什麼覆蓋率。
+  #   萬一外部服務停了，靠的是 coverage.yml 的每日檢查開 Issue 通知你，
+  #   以及 cron-job.org 自己的「執行失敗」email 通知。
   workflow_dispatch:
 
 # 預設的 GITHUB_TOKEN 是唯讀的，這裡要寫 commit 進 data 分支，所以要開寫入權限。
@@ -51,6 +44,9 @@ permissions:
 # 同一時間只准跑一個。為什麼？
 #   如果上一次執行被延遲、跟下一次重疊，兩個 job 會同時想 push 到 data 分支，
 #   其中一個一定會被拒絕（甚至可能撞到同一個檔名）。排隊執行最單純。
+#   （GitHub 的規則：同一群組最多一個在跑、一個在排隊；
+#     又有新的進來時，舊的那個「排隊中」會被取消，所以 Actions 頁面偶爾
+#     看到 cancelled 是正常的。）
 concurrency:
   group: collect
   cancel-in-progress: false
@@ -58,9 +54,8 @@ concurrency:
 jobs:
   collect:
     runs-on: ubuntu-latest
-    # 迴圈本身跑 330 分鐘（5.5 小時），這裡設 350 留 20 分鐘緩衝，
-    # 讓最後一輪有時間乾淨收尾。GitHub 單次工作的硬上限是 360 分鐘。
-    timeout-minutes: 350
+    # 正常一次大約 40 秒。設 10 分鐘上限，卡住的話會被砍掉而不是無限佔用。
+    timeout-minutes: 10
 
     steps:
       - name: 取出程式（main 分支）
@@ -86,18 +81,29 @@ jobs:
       - name: 安裝套件（只有 requests + pyarrow）
         run: pip install -r requirements-collect.txt
 
-      - name: 收集迴圈（每 5 分鐘一輪，連續 5.5 小時）
-        # 迴圈邏輯放在 scripts/collect_loop.sh，不寫在 YAML 裡 ——
-        # 這樣可以在本機直接測（bash scripts/collect_loop.sh ./data-branch 3 60），
-        # 不用每改一行就 push 一次上來碰運氣。
+      - name: 抓一次資料
+        # 用絕對路徑（$GITHUB_WORKSPACE）而不是相對路徑，
+        # 這樣不管 Actions 從哪個目錄執行都不會寫錯位置。
+        run: python scripts/collect.py --out-dir "$GITHUB_WORKSPACE/data-branch"
+
+      - name: 抓一次天氣資料
+        # 【continue-on-error: true 是這一步的重點】
         #
-        # 每一輪做三件事：收 YouBike -> 收天氣 -> 推上 data 分支。
-        # 三件事各自獨立接住錯誤：任何一個失敗都只印訊息，
-        # 不會中斷接下來幾個小時的收集。
+        # 天氣是「附加」資料，YouBike 才是主角。如果氣象署掛掉、金鑰過期、
+        # 或回傳格式改了，絕對不能讓它害 YouBike 的資料也收不到 ——
+        # 那會是「為了次要的東西弄丟主要的東西」。
+        # 加了這一行，天氣失敗只會在紀錄裡留下黃色警告，
+        # 後面的推送照常進行，YouBike 的資料一樣會存下來。
         #
-        # 每輪都推而不是最後才推：資料只存在 runner 的硬碟上，
-        # job 一旦被砍（逾時、取消、GitHub 維護），沒推的資料就全沒了。
+        # 氣象署每 10 分鐘才更新一次，所以每 5 分鐘執行會有大約一半
+        # 印出「跳過：這份觀測已經存過了」—— 那是正常的，不是錯誤。
+        continue-on-error: true
         env:
-          # 天氣要用的金鑰，值來自 repo 的 Settings -> Secrets and variables -> Actions
+          # 值來自 repo 的 Settings -> Secrets and variables -> Actions
           CWA_API_KEY: ${{ secrets.CWA_API_KEY }}
-        run: bash scripts/collect_loop.sh "$GITHUB_WORKSPACE/data-branch" 330 300
+        run: python scripts/collect_weather.py --out-dir "$GITHUB_WORKSPACE/data-branch"
+
+      - name: 把新資料推回 data 分支
+        # 推送的邏輯（commit 訊息、push 失敗重試）抽到 scripts/push_data.sh，
+        # 跟 compact.yml 共用同一份，不會兩邊走鐘。
+        run: bash scripts/push_data.sh data "$GITHUB_WORKSPACE/data-branch"
