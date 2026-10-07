@@ -1,0 +1,116 @@
+# 每月備份 + data 分支瘦身。
+#
+# ┌─ 這個 workflow 做什麼 ─────────────────────────────────────────────┐
+# │ 1. 把上個月的日檔打包成 data-YYYY-MM.tar.gz（scripts/backup_month.py）│
+# │ 2. 上傳到 GitHub Release，tag 叫 data-YYYY-MM                       │
+# │ 3. 下載回來核對 SHA256 —— 確定備份真的完整存在 GitHub 上             │
+# │ 4. 前三步全部成功，才把 data 分支瘦身（scripts/slim_data_branch.sh） │
+# └────────────────────────────────────────────────────────────────────┘
+#
+# 為什麼 Release 的 tag 掛在 main 而不是 data？
+#   tag 會讓它指到的 commit（以及那個 commit 之前的整串歷史）永遠被保留。
+#   如果掛在 data 上，瘦身丟掉的歷史就會被 tag 留住，等於白做。
+#   Release 只是放壓縮檔的容器，掛在哪個 commit 不影響內容。
+name: 每月備份資料
+
+on:
+  schedule:
+    # 每月 2 號 UTC 06:00 = 台北時間 14:00。
+    # 為什麼是 2 號下午？要等上個月最後一天被 compact 壓完
+    # （compact 排在 1 號凌晨 3 點，但 GitHub 排程常延遲好幾個小時），留足緩衝。
+    # 排程如果沒觸發，到 Actions 頁面手動按一下就好。
+    - cron: "0 6 2 * *"
+
+  workflow_dispatch:
+    inputs:
+      month:
+        description: "要備份的月份 YYYY-MM（留空 = 上個月）"
+        required: false
+      slim:
+        description: "備份成功後要不要瘦身 data 分支"
+        type: boolean
+        default: true
+
+permissions:
+  contents: write   # 建 Release、改 data 分支
+  actions: write    # 瘦身時暫停／恢復 collect workflow
+
+concurrency:
+  group: backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: 取出程式（main 分支）
+        uses: actions/checkout@v7
+
+      - name: 取出資料分支（data）到 data-branch/
+        uses: actions/checkout@v7
+        with:
+          ref: data
+          path: data-branch
+          fetch-depth: 1
+
+      - name: 安裝 Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements-collect.txt
+
+      - name: 安裝套件
+        run: pip install -r requirements-collect.txt
+
+      - name: 打包上個月的資料
+        id: pack
+        # 手動輸入的月份走環境變數，不直接貼進指令（避免注入，見 coverage.yml 的同樣做法）
+        env:
+          MONTH: ${{ inputs.month }}
+        run: |
+          if [ -n "$MONTH" ]; then
+            python scripts/backup_month.py --data-dir data-branch --month "$MONTH" --out-dir out
+          else
+            python scripts/backup_month.py --data-dir data-branch --out-dir out
+          fi
+
+      - name: 上傳到 GitHub Release
+        env:
+          M: ${{ steps.pack.outputs.month }}
+          ARCHIVE: ${{ steps.pack.outputs.archive }}
+          MANIFEST: ${{ steps.pack.outputs.manifest }}
+        run: |
+          TAG="data-$M"
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            # 重跑同一個月：覆蓋舊的壓縮檔（內容應該一樣，除非之前那份不完整）
+            gh release upload "$TAG" "$ARCHIVE" "$ARCHIVE.sha256" --clobber
+          else
+            gh release create "$TAG" "$ARCHIVE" "$ARCHIVE.sha256" \
+              --target main --latest=false \
+              --title "資料備份 $M" --notes-file "$MANIFEST"
+          fi
+
+      - name: 下載回來核對
+        # 「上傳成功」不等於「GitHub 上的檔案是完整的」。瘦身之後歷史就沒了，
+        # 所以一定要親眼確認備份是好的，才能進行下一步。
+        env:
+          M: ${{ steps.pack.outputs.month }}
+          WANT: ${{ steps.pack.outputs.sha256 }}
+        run: |
+          gh release download "data-$M" --pattern "data-$M.tar.gz" --dir verify --clobber
+          GOT=$(sha256sum "verify/data-$M.tar.gz" | cut -d' ' -f1)
+          echo "期望 $WANT"
+          echo "實際 $GOT"
+          [ "$GOT" = "$WANT" ] || { echo "❌ 下載回來的備份跟本地不一樣，中止（不瘦身）"; exit 1; }
+          tar -tzf "verify/data-$M.tar.gz" > /dev/null
+          echo "✅ 備份完整"
+
+      - name: 瘦身 data 分支
+        # 排程觸發時 inputs.slim 是空的，視為要瘦身；手動觸發時看勾選
+        if: ${{ github.event_name == 'schedule' || inputs.slim }}
+        run: bash scripts/slim_data_branch.sh "$GITHUB_WORKSPACE/data-branch"

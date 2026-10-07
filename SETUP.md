@@ -173,8 +173,23 @@ git worktree add data-branch data
 之後想更新到最新資料：
 
 ```bash
-git -C data-branch pull
+git -C data-branch fetch origin data
 ```
+
+```bash
+git -C data-branch reset --hard origin/data
+```
+
+> 為什麼不用 `git pull`？data 分支每月會「瘦身」一次（丟掉 git 歷史、只留目前的檔案，
+> 見 `.github/workflows/backup.yml`）。瘦身後新舊歷史接不起來，`pull` 會失敗。
+> `reset --hard` 是「直接變成遠端那個版本」，不管歷史怎麼變都能用。
+> （`data-branch/` 裡不要放自己的東西 —— 這個指令會把它還原成遠端的樣子。）
+
+### 舊月份的備份
+
+每個月的資料也備份在 [GitHub Release](https://github.com/Bryant0909/youbike-forecast/releases)
+（tag 叫 `data-YYYY-MM`）。萬一 data 分支出事，下載對應月份的 `data-YYYY-MM.tar.gz`
+解壓到 `data-branch/` 就能還原；壓縮檔裡的 `MANIFEST.md` 列出每個檔的 SHA256 可以核對。
 
 資料的結構長這樣：
 
