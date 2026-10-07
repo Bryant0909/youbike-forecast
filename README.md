@@ -27,8 +27,9 @@
 ```
 SETUP.md       換電腦時怎麼還原
 .github/       GitHub Actions 排程（收集、壓縮、監控）
-scripts/       資料收集（YouBike／天氣）、壓縮、覆蓋率檢查
-src/youbike/   資料載入（data.py）、特徵工程、模型
+scripts/       資料收集（YouBike／天氣）、壓縮、覆蓋率檢查、每月備份、跑 baseline
+src/youbike/   資料載入（data.py、weather.py）、標籤與切分（dataset.py）、
+               評估指標（evaluate.py）、baseline（baselines.py）
 pyproject.toml  讓 import youbike 能用（pip install -e .）
 data/raw/      原始資料（不上傳 GitHub）
 notebooks/     EDA 與實驗
@@ -40,24 +41,45 @@ AI_LOG.md      AI 協作紀錄
 
 | 排程（台北時間） | 做什麼 | 程式 |
 |---|---|---|
-| 每 5 分鐘 | 抓一次全台北 1808 站的即時資料，存成 Parquet | `scripts/collect.py` |
-| 每 5 分鐘 | 抓一次中央氣象署自動氣象站觀測（每 10 分鐘更新，重複的會跳過） | `scripts/collect_weather.py` |
+| 每 5 分鐘（外部服務 cron-job.org 觸發） | 抓一次全台北 1808 站的即時資料，存成 Parquet | `scripts/collect.py` |
+| 每 5 分鐘（同上） | 抓一次中央氣象署自動氣象站觀測（每 10 分鐘更新，重複的會跳過） | `scripts/collect_weather.py` |
 | 每天 03:00 | 把前一天的小檔壓成日檔（YouBike 小 7 倍、天氣小 6 倍） | `scripts/compact.py` |
 | 每天 03:30 | 檢查覆蓋率／空隙／尖峰時段／天氣，不足就自動開 Issue 通知 | `scripts/check_coverage.py` |
+| 每月 2 號 14:00 | 上個月的資料備份到 [Release](https://github.com/Bryant0909/youbike-forecast/releases)，核對後把 data 分支瘦身 | `scripts/backup_month.py`、`scripts/slim_data_branch.sh` |
+
+> 為什麼收集要靠外部服務觸發？GitHub 內建排程對這個 repo 極不可靠（實測 7.5 小時只觸發 1 次），
+> 詳見 [`docs/DECISIONS.md`](docs/DECISIONS.md)。
 
 資料存在 [`data` 分支](https://github.com/Bryant0909/youbike-forecast/tree/data)，
 程式和資料的 commit 歷史完全分開。
 
 ## 狀態
 
-🚧 phase 0 進行中
+🚧 資料累積中（從 2026-09-30 開始，目標 4~8 週）；phase 2 的評估框架已先建好
 
+**phase 0：資料收集** ✅
 - [x] 0-1 確認 data.taipei YouBike 2.0 即時 API 可用（1808 站）
 - [x] 0-2 建立 GitHub public repo
 - [x] 0-3 `scripts/collect.py` 收集程式
-- [x] 0-4 GitHub Actions 每 5 分鐘排程（`.github/workflows/collect.yml`）
+- [x] 0-4 GitHub Actions 每 5 分鐘收集（`.github/workflows/collect.yml`）
 - [x] 0-5 每日壓縮 288 個小檔成一個日檔（`scripts/compact.py`，實測小 7 倍）
 - [x] 0-6 每日覆蓋率檢查，不足就自動開 Issue（`scripts/check_coverage.py`）
+- [x] 0-7 天氣資料收集（中央氣象署自動氣象站，每 10 分鐘）
+- [x] 0-8 改由外部服務每 5 分鐘觸發（換上線後 19 小時 229 次全部成功、零漏收）
+- [x] 每月備份到 GitHub Release + data 分支瘦身（`.github/workflows/backup.yml`）
+
+**phase 1：探索性分析**
+- [x] 1-1 資料載入層（`src/youbike/data.py`）
+- [x] 1-2 資料健全性檢查（`scripts/data_health.py`）
+- [ ] 1-3 EDA：哪些站最常空、尖峰時段在哪（等資料累積多一點）
+
+**phase 2：Baseline**
+- [x] 2-1 建標籤（30 分鐘後的答案；附近沒資料就跳過，不刪原始資料）
+- [x] 2-2 照時間切資料（交界處 purge，避免偷看未來）
+- [x] 2-3 評估指標：PR-AUC、固定精確率下的召回率
+- [x] 2-4 Baseline ①「維持現狀」
+- [x] 2-5 Baseline ②「歷史同時段平均」（`python scripts/run_baselines.py`）
+- [ ] 2-6 資料滿 4 週後重跑、定案預測目標（可借 <= 0 還是 <= 1）
 
 資料收集中：[`data` 分支](https://github.com/Bryant0909/youbike-forecast/tree/data)
 · [執行紀錄](https://github.com/Bryant0909/youbike-forecast/actions)
