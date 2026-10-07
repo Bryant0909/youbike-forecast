@@ -191,6 +191,46 @@ def expected_points(day_start, day_end):
     return max(1, int(math.ceil(minutes / INTERVAL_MIN)))
 
 
+def effective_points(local_times, start, end):
+    """
+    [start, end) 之間「實得幾個時間點」—— 用「應有 − 漏掉」來算，最多就是應有的數量。
+
+    【為什麼不直接數窗格裡有幾個點】
+    取樣時間不會剛好落在整 5 分，而是會前後晃動（GitHub 開機器的時間有快有慢、
+    來源的更新時間也會差個一分鐘）。直接數的話，窗格兩頭剛好都多吃到一個點，
+    就會數出 37 / 36 = 103% 這種不可能的數字 —— 10/4 早上尖峰就是這樣：
+    開頭 07:00:17 在窗格內，結尾 09:59:16 也在窗格內，180 分鐘裡塞進 37 個點。
+
+    【為什麼也不用「每個點歸到最近的 5 分鐘格子」】
+    試過，結果更糟：如果取樣剛好都落在每 5 分鐘的第 2.5 分鐘附近
+    （例如 07:02:20、07:07:40），晃一下就有兩個點擠進同一格、旁邊那格變空，
+    明明一筆都沒漏卻報成有缺 —— 10/2 實際 288 筆、零空隙，會被算成 285。
+    長迴圈每次開跑的時間不固定，所以這種「相位」不是我們能控制的。
+
+    【現在的算法：看相鄰兩點隔了多久】
+    隔約 5 分鐘 = 沒漏；約 10 分鐘 = 漏 1 個；88 分鐘 = 漏 17 個（四捨五入）。
+    只看間隔長度、不看落在幾分幾秒，所以跟相位無關，晃動也不會被誤判成缺漏。
+    窗格的頭尾兩段合起來當成一段算（頭空 0.3 分 + 尾空 4.7 分 = 剛好一個間隔，沒漏）。
+    這跟「最大連續空隙」用的是同一個標準：間隔超過 1.5 倍（7.5 分鐘）才算有缺。
+    """
+    pts = [t for t in local_times if start <= t < end]
+    if not pts:
+        return 0
+    expected = expected_points(start, end)
+
+    def n_missing(minutes):
+        # 一段長 minutes 分鐘的間隔裡，中間漏掉了幾個取樣點
+        return max(0, int(round(minutes / INTERVAL_MIN)) - 1)
+
+    missing = 0
+    for a, b in zip(pts, pts[1:]):
+        missing += n_missing((b - a).total_seconds() / 60.0)
+    edge = ((pts[0] - start) + (end - pts[-1])).total_seconds() / 60.0
+    missing += n_missing(edge)
+
+    return max(0, min(expected, expected - missing))
+
+
 def find_gaps(local_times, date_str):
     """
     找出這一天所有的「空隙」。
@@ -237,7 +277,8 @@ def peak_coverage(local_times, date_str):
             continue
 
         expected = expected_points(w_start, effective_end)
-        got = sum(1 for t in local_times if w_start <= t < effective_end)
+        # 用「應有 − 漏掉」而不是直接數點，理由見 effective_points
+        got = effective_points(local_times, w_start, effective_end)
         state = "done" if effective_end >= w_end else "partial"
         out.append((label, h_from, h_to, got, expected,
                     got / expected if expected else 0.0, state))
@@ -354,7 +395,10 @@ def build_report(date_str, data_dir, check_freshness):
     day_start, day_end, partial = day_bounds(date_str)
     expected = expected_points(day_start, day_end)
     # 這一天還沒過完的話只算到「現在」為止（理由見 day_bounds）
-    n = sum(1 for t in local_times if t <= day_end)
+    # n 是「應有 − 漏掉」，用來算覆蓋率（不會超過 100%，見 effective_points）；
+    # n_points 是實際收到幾次，只拿來算「總筆數 ≈ 次數 × 站數」那一行。
+    n = effective_points(local_times, day_start, day_end)
+    n_points = sum(1 for t in local_times if t <= day_end)
     coverage = n / expected
 
     if partial:
@@ -441,7 +485,7 @@ def build_report(date_str, data_dir, check_freshness):
     lines.append("### 其他")
     lines.append("")
     lines.append("- 儲存形式：{}".format(form))
-    lines.append("- 總筆數：{:,}（{} 個時間點 × 約 {} 站）".format(rows, n, n_stations))
+    lines.append("- 總筆數：{:,}（{} 個時間點 × 約 {} 站）".format(rows, n_points, n_stations))
     if lags:
         lines.append("- 資料延遲（我們抓到的時間 − 資料產生時間）："
                      "平均 {:.0f} 秒、最大 {:.0f} 秒".format(sum(lags) / len(lags), max(lags)))
