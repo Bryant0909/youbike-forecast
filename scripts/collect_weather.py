@@ -86,6 +86,8 @@ SNAPSHOT_SCHEMA = pa.schema([
     ("wind_dir_deg", pa.float32()),      # 風向（度，0=北）
     ("gust_ms", pa.float32()),           # 陣風最大風速（公尺/秒）
     ("precip_mm", pa.float32()),         # 雨量（毫米）<- 對 YouBike 影響最大的一項
+                                         # ⚠️ 是「當天 00:00 起的累積量」（2026-10-07 實測確認），
+                                         #    不能直接當特徵，要用 youbike.weather.rain_increment() 換算
     ("uv_index", pa.float32()),          # 紫外線指數
     ("sunshine", pa.float32()),          # 日照（氣象署未標單位，見下方註解）
     ("weather", pa.string()),            # 天氣現象文字（晴／多雲／多雲有雨…）

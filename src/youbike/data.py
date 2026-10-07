@@ -95,17 +95,22 @@ def default_data_dir():
     )
 
 
-def _snap_dir(data_dir=None):
-    return os.path.join(data_dir or default_data_dir(), "snapshots")
+def _snap_dir(data_dir=None, subdir="snapshots"):
+    # subdir：YouBike 快照在 snapshots/，天氣觀測在 weather/，兩邊的檔案結構一模一樣
+    return os.path.join(data_dir or default_data_dir(), subdir)
 
 
 # ---------------------------------------------------------------------------
 # 盤點：手上有哪些日子的資料
 # ---------------------------------------------------------------------------
 
-def available_days(data_dir=None):
+def available_days(data_dir=None, subdir="snapshots"):
     """
     列出有資料的每一天。
+
+    subdir 預設是 YouBike 快照；給 "weather" 就是天氣觀測（youbike.weather 用的）。
+    兩種資料共用這一份掃描邏輯，不各寫一份 —— 下面那個「邊掃邊塞會漏資料」的
+    bug 修一次就兩邊都修好。
 
     回傳 list of dict：
         {"date": "2026-09-30", "form": "小檔" or "日檔", "paths": [...], "n_files": N}
@@ -113,7 +118,7 @@ def available_days(data_dir=None):
     「兩種形式」是 phase 0-5 壓縮造成的：當天的還是一堆小檔，
     之前的已經壓成一個日檔。分析的人不該需要知道這件事，所以在這裡吸收掉。
     """
-    snap_dir = _snap_dir(data_dir)
+    snap_dir = _snap_dir(data_dir, subdir)
 
     # 【刻意分兩個 dict 再合併，而不是邊掃邊塞進同一個 dict】
     #
