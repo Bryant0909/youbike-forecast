@@ -24,3 +24,4 @@
 | 2026-10-07 | C：phase 2-1 ~ 2-5 標籤、時間切分、評估、兩個 baseline | `src/youbike/dataset.py`（`make_labels` 用 merge_asof ±2.5 分鐘配答案、`time_split` 含 purge）、`evaluate.py`（numpy 版 average precision／recall@精確率，同分處理，10 個手算案例驗證）、`baselines.py`（維持現狀、歷史同時段平均含退回機制）、`scripts/run_baselines.py`；修正 merge_asof 毫秒／奈秒型別不符；跑出第一版 baseline 成績 | 待確認 |
 | 2026-10-07 | B：每月備份與 data 分支瘦身 | `scripts/backup_month.py`（月份已過完／無未壓縮資料夾／Parquet 可讀才打包，附 MANIFEST 與 SHA256；本機測過正常、未過完月份、未壓縮、壞檔四種情況）、`scripts/slim_data_branch.sh`（暫停 collect + trap 恢復、commit-tree 保留 tree、force-with-lease、推完核對 tree）、`.github/workflows/backup.yml`（下載核對成功才瘦身）、SETUP.md 改用 fetch + reset | 待確認 |
 | 2026-10-07 | D：更新進度文件 | README 狀態清單補上 0-7、0-8、備份、phase 1／2 已完成項目，自動化表加外部觸發與每月備份；CLAUDE.md 的任務清單改成目前狀態與接下來的步驟，站數更正為約 1800 | 待確認 |
+| 2026-10-07 | 第一次手動瘦身 data 分支 | 先「只備份不瘦身」實跑一次驗證 Release 上傳與核對，擁有者確認後才執行瘦身：1,847 個 commit -> 1 個，collect 只暫停 2 秒；獨立核對與瘦身前相比只多了一筆新收的檔案、無任何修改或刪除；瘦身後 6 次收集全部成功接在新分支上；本機 data-branch 以 fetch + reset 更新 | 擁有者確認後執行 |
