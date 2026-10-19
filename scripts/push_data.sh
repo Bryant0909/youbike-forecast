@@ -28,9 +28,17 @@ DATA_DIR="${2:-$REPO_ROOT/data-branch}"
 
 cd "$DATA_DIR"
 
-# commit 掛在 Actions 機器人名下，跟你自己手寫的 commit 分得開
-git config user.name  "github-actions[bot]"
-git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+# commit 掛在 Actions 機器人名下，跟你自己手寫的 commit 分得開。
+#
+# 為什麼用環境變數，不用 git config？
+#   git config 會寫進 .git/config 永久保存。在 Actions 上沒差（每次都是全新的機器），
+#   但在本機跑過一次，整個 repo 的作者就都變成機器人了 —— data-branch/ 這個 worktree
+#   跟主 repo 共用同一份設定，你之後自己寫的 commit 也會掛在機器人名下（2026-10 真的發生過）。
+#   環境變數只對這支腳本、和它叫的 git 指令（commit、rebase）有效，腳本結束就消失。
+export GIT_AUTHOR_NAME="github-actions[bot]"
+export GIT_AUTHOR_EMAIL="41898282+github-actions[bot]@users.noreply.github.com"
+export GIT_COMMITTER_NAME="$GIT_AUTHOR_NAME"
+export GIT_COMMITTER_EMAIL="$GIT_AUTHOR_EMAIL"
 
 # 沒有任何變更就直接結束。
 # 這不是錯誤（代表來源還沒更新，或是沒有日子需要壓縮），所以用 exit 0。

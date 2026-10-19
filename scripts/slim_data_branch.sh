@@ -54,8 +54,13 @@ fi
 
 # --- 2. 用最新的檔案快照建立一個沒有歷史的 commit ------------------------
 cd "$DATA_DIR"
-git config user.name  "github-actions[bot]"
-git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+# 用環境變數而不是 git config，原因見 push_data.sh：git config 會永久寫進
+# .git/config，在本機跑過一次就會把整個 repo 的作者都改成機器人。
+# commit-tree 也是讀這幾個變數來決定作者。
+export GIT_AUTHOR_NAME="github-actions[bot]"
+export GIT_AUTHOR_EMAIL="41898282+github-actions[bot]@users.noreply.github.com"
+export GIT_COMMITTER_NAME="$GIT_AUTHOR_NAME"
+export GIT_COMMITTER_EMAIL="$GIT_AUTHOR_EMAIL"
 
 git fetch --depth=1 origin data
 OLD_TIP=$(git rev-parse FETCH_HEAD)
