@@ -28,13 +28,14 @@
 - **不做本機備援收集**（擁有者下班後家裡沒網路，只能涵蓋非尖峰時段，效益低）；改成每日檢查覆蓋率，不足就自動開 Issue 用 email 通知
 - **評估指標**：這是不平衡問題，不看 accuracy，看 PR-AUC 或「固定精確率下的召回率」
 
-## 目前狀態（2026-10-07）
+## 目前狀態（2026-10-19）
 - **phase 0 收集已完成**（0-1 ~ 0-8 + 每月備份），細節見 `README.md` 的狀態清單
+- **phase 1 已完成**：EDA 在 `notebooks/01_eda.ipynb`，結論與 phase 3 特徵方向見 `docs/DECISIONS.md` 2026-10-19
 - 資料從 2026-09-30 開始累積，**建模要等 4~8 週**；在那之前做不依賴資料量的事
 - phase 2 的評估框架已先建好：`src/youbike/dataset.py`（標籤、時間切分）、`evaluate.py`、`baselines.py`、`scripts/run_baselines.py`
 - 天氣雨量 `precip_mm` 是**日累積值**，建模一律用 `youbike.weather.rain_increment()` 換算後的 `rain_mm`
+- 本機 Python 偶發存取違規當掉（約 1/4 機率），另一個 session 在處理；遇到就重跑
 
 ## 接下來
-- [ ] **1-3** EDA：哪些站最常空、尖峰時段在哪（資料多一點再做）
-- [ ] **2-6** 資料滿 4 週後重跑 baseline，定案預測目標（可借 <= 0 或 <= 1）
-- [ ] **phase 3** LightGBM + 天氣、假日、時段特徵（屆時再裝 scikit-learn、lightgbm）
+- [ ] **2-6** 資料滿 4 週後（約 10/28）用新建模範圍重跑 baseline，定案預測目標（可借 <= 0 或 <= 1）
+- [ ] **phase 3** LightGBM + 現在車數、最近歷史、時段 × 日子類型、站的類型、天氣、假日特徵（屆時再裝 scikit-learn、lightgbm）；評估要分區、看不只一段測試期
