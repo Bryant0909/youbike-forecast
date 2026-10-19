@@ -20,21 +20,23 @@
 
 ## 已定案的決定（詳見 `docs/DECISIONS.md`）
 - **收集範圍**：全台北市約 1800 站全存（實測 1808~1813 站）（API 一次就回傳全部，存全部的成本接近零）
-- **建模範圍**：第一個模型只做一區（大安區），避免一開始太複雜
+- **建模範圍**：第一個模型只做「大安區 + 臺大公館校區」（約 280 站，`youbike.data.MODEL_DISTRICTS`），避免一開始太複雜。API 把臺大校園的站另外標成「臺大公館校區」，只篩大安區會把校園切成兩半
 - **存放方式**：兩段式 —— 每 5 分鐘寫一個小 Parquet；每日凌晨壓縮成一個日檔並刪掉小檔；放在 repo 的 `data` 分支；每月備份一份到 GitHub Release
 - **執行環境**：GitHub Actions，repo 必須設 **public**（私有 repo 每月 2000 分鐘額度會爆掉）
 - **收集觸發**：GitHub 內建排程對這個 repo 不可靠，收集改由外部服務 cron-job.org 每 5 分鐘打 `workflow_dispatch`（token 只給 Actions 寫入權限）
-- **預測目標**：等資料滿 4 週、重跑 baseline 後定案（原始資料存的是車輛數，標籤隨時可重算）；目前傾向「可借車輛 <= 1」。實測發生率：<= 0 約 4~7%、<= 1 約 10~16%（大安區）
+- **預測目標**：等資料滿 4 週、重跑 baseline 後定案（原始資料存的是車輛數，標籤隨時可重算）；目前傾向「可借車輛 <= 1」。實測發生率：<= 0 約 4~7%、<= 1 約 10~16%（大安區；加入校區後上班日 <= 1 約 24%）
 - **不做本機備援收集**（擁有者下班後家裡沒網路，只能涵蓋非尖峰時段，效益低）；改成每日檢查覆蓋率，不足就自動開 Issue 用 email 通知
 - **評估指標**：這是不平衡問題，不看 accuracy，看 PR-AUC 或「固定精確率下的召回率」
 
-## 目前狀態（2026-10-07）
+## 目前狀態（2026-10-19）
 - **phase 0 收集已完成**（0-1 ~ 0-8 + 每月備份），細節見 `README.md` 的狀態清單
+- **phase 1 已完成**：EDA 在 `notebooks/01_eda.ipynb`、推測驗證在 `02_hypotheses.ipynb`，結論與 phase 3 特徵方向見 `docs/DECISIONS.md` 2026-10-19
+- 網頁版 EDA 的資料用 `python scripts/export_dashboard.py` 重新匯出（輸出在 `data/processed/dashboard/`，再請 Claude 上傳）
 - 資料從 2026-09-30 開始累積，**建模要等 4~8 週**；在那之前做不依賴資料量的事
 - phase 2 的評估框架已先建好：`src/youbike/dataset.py`（標籤、時間切分）、`evaluate.py`、`baselines.py`、`scripts/run_baselines.py`
 - 天氣雨量 `precip_mm` 是**日累積值**，建模一律用 `youbike.weather.rain_increment()` 換算後的 `rain_mm`
+- 本機 Python 偶發存取違規當掉（約 1/4 機率），另一個 session 在處理；遇到就重跑
 
 ## 接下來
-- [ ] **1-3** EDA：哪些站最常空、尖峰時段在哪（資料多一點再做）
-- [ ] **2-6** 資料滿 4 週後重跑 baseline，定案預測目標（可借 <= 0 或 <= 1）
-- [ ] **phase 3** LightGBM + 天氣、假日、時段特徵（屆時再裝 scikit-learn、lightgbm）
+- [ ] **2-6** 資料滿 4 週後（約 10/28）用新建模範圍重跑 baseline，定案預測目標（可借 <= 0 或 <= 1）
+- [ ] **phase 3** LightGBM + 現在車數、最近歷史、時段 × 日子類型、站的類型、全市總可借車數、天氣、假日特徵（屆時再裝 scikit-learn、lightgbm）；評估要分區、看不只一段測試期

@@ -28,8 +28,9 @@ phase 1-1：資料載入層 —— 把散落的 Parquet 檔讀成一張可以直
     # 讀全部資料
     df = load_snapshots()
 
-    # 只讀大安區、只讀某段日期
-    df = load_snapshots(start="2026-10-01", end="2026-10-31", district="大安區")
+    # 只讀建模範圍（大安區 + 臺大公館校區）、只讀某段日期
+    from youbike.data import MODEL_DISTRICTS
+    df = load_snapshots(start="2026-10-01", end="2026-10-31", district=MODEL_DISTRICTS)
 
 也可以直接當程式跑，會印出資料盤點：
 
@@ -55,6 +56,14 @@ DAY_FILE_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})\.parquet$")
 
 INTERVAL_MIN = 5
 EXPECTED_PER_DAY = 24 * 60 // INTERVAL_MIN   # = 288
+
+# 第一個模型的建模範圍（見 docs/DECISIONS.md 2026-10-19）。
+# 為什麼不是只有「大安區」？API 把臺大校園裡的 65 站另外標成「臺大公館校區」，
+# 但臺大周邊還有一些站（社科院圖書館、萬才館…）被標成大安區 —— 只篩「大安區」
+# 等於把臺大校園切成兩半，而那一帶剛好是最常借不到車的地方（phase 1-3d）。
+# 所有「預設看建模範圍」的程式都用這個常數，要改範圍只改這裡。
+MODEL_DISTRICTS = ["大安區", "臺大公館校區"]
+MODEL_SCOPE_NAME = "大安區 + 臺大公館校區"   # 印出來給人看的名字
 
 
 class DataNotFound(Exception):
@@ -178,13 +187,19 @@ def load_stations(data_dir=None):
 
 
 def district_station_ids(district, data_dir=None):
-    """某個行政區（例如 '大安區'）有哪些站的編號。"""
+    """
+    某個（或某幾個）行政區有哪些站的編號。
+
+    district 可以是一個字串（'大安區'），也可以是 list（MODEL_DISTRICTS）。
+    任何一個名字找不到站就直接報錯 —— 打錯字時安靜地少一區，比報錯難發現得多。
+    """
+    names = [district] if isinstance(district, str) else list(district)
     st = load_stations(data_dir)
-    ids = st.loc[st["district"] == district, "station_id"].tolist()
-    if not ids:
+    missing = [d for d in names if not (st["district"] == d).any()]
+    if missing:
         available = sorted(st["district"].dropna().unique())
-        raise ValueError("找不到行政區 {!r}。可用的有：{}".format(district, available))
-    return ids
+        raise ValueError("找不到行政區 {}。可用的有：{}".format(missing, available))
+    return st.loc[st["district"].isin(names), "station_id"].tolist()
 
 
 # ---------------------------------------------------------------------------
@@ -199,7 +214,8 @@ def load_snapshots(start=None, end=None, district=None, station_ids=None,
 
     參數：
         start, end        日期字串 'YYYY-MM-DD'，含頭含尾。None = 不限制
-        district          只要某個行政區，例如 '大安區'
+        district          只要某個行政區，例如 '大安區'；也可以給 list，
+                          建模範圍就是 district=MODEL_DISTRICTS
         station_ids       只要指定的站（給了 district 就不用給這個）
         include_inactive  要不要包含停用中的站（預設不要）
         with_station_info 要不要把站名/行政區/經緯度也 join 進來
@@ -365,9 +381,9 @@ def summary(data_dir=None, show_days=14):
         top = st["district"].value_counts().head(5)
         print("站數最多的行政區：" + "、".join(
             "{} {} 站".format(d, n) for d, n in top.items()))
-        # 建模範圍已定案是大安區（見 docs/DECISIONS.md），順手把它的站數印出來
-        n_daan = int((st["district"] == "大安區").sum())
-        print("大安區（第一個模型的範圍）：{} 站".format(n_daan))
+        # 順手把建模範圍的站數印出來（範圍見 MODEL_DISTRICTS）
+        n_scope = int(st["district"].isin(MODEL_DISTRICTS).sum())
+        print("{}（第一個模型的範圍）：{} 站".format(MODEL_SCOPE_NAME, n_scope))
     except DataNotFound as e:
         print("（讀不到站點基本資料：{}）".format(e))
 
