@@ -22,10 +22,10 @@ phase 2-1 ~ 2-2：把快照資料變成「可以拿來訓練／評估」的樣�
 
 用法：
 
-    from youbike.data import load_snapshots
+    from youbike.data import MODEL_DISTRICTS, load_snapshots
     from youbike.dataset import make_labels, time_split
 
-    df = load_snapshots(district="大安區")
+    df = load_snapshots(district=MODEL_DISTRICTS)   # 建模範圍：大安區 + 臺大公館校區
     samples = make_labels(df, threshold=1)
     train, valid, test = time_split(samples, valid_days=["2026-10-05"],
                                     test_days=["2026-10-06", "2026-10-07"])

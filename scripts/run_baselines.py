@@ -5,7 +5,8 @@ phase 2：跑兩個 baseline，印出成績單。
      -> 用 PR-AUC 與 recall@精確率 評分（2-3）
 
 用法：
-    python scripts/run_baselines.py                       # 預設：大安區、門檻 0 和 1 都跑
+    python scripts/run_baselines.py                       # 預設：建模範圍、門檻 0 和 1 都跑
+    python scripts/run_baselines.py --district 大安區      # 只看某一區（可給多個）
     python scripts/run_baselines.py --threshold 1         # 只跑「可借 <= 1」
     python scripts/run_baselines.py --test-days 2 --valid-days 1
 
@@ -18,7 +19,7 @@ import argparse
 import pandas as pd
 
 from youbike.baselines import historical_average_score, persistence_score
-from youbike.data import available_days, load_snapshots
+from youbike.data import MODEL_DISTRICTS, MODEL_SCOPE_NAME, available_days, load_snapshots
 from youbike.dataset import make_labels, time_split
 from youbike.evaluate import precision_recall_at, report
 
@@ -50,7 +51,8 @@ def evaluate_split(name, part, train, threshold, min_precision):
 
 def main():
     ap = argparse.ArgumentParser(description="跑兩個 baseline 並印出成績單")
-    ap.add_argument("--district", default="大安區")
+    ap.add_argument("--district", nargs="+", default=MODEL_DISTRICTS,
+                    help="要評估的行政區，可以給多個（預設是建模範圍：{}）".format(MODEL_SCOPE_NAME))
     ap.add_argument("--threshold", type=int, action="append",
                     help="借不到車 = 可借 <= 這個數字。可以給多次；預設 0 和 1 都跑")
     ap.add_argument("--test-days", type=int, default=2, help="最後幾天當測試（預設 2）")
@@ -69,7 +71,7 @@ def main():
 
     df = load_snapshots(district=args.district, verbose=False)
     print("{}：{:,} 列、{} 站、{} ~ {}".format(
-        args.district, len(df), df["station_id"].nunique(), days[0], days[-1]))
+        " + ".join(args.district), len(df), df["station_id"].nunique(), days[0], days[-1]))
     print()
 
     all_rows = []

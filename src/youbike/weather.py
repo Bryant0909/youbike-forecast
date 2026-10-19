@@ -29,7 +29,8 @@ import pyarrow.parquet as pq
 
 from youbike.data import TAIPEI_TZ, DataNotFound, available_days, default_data_dir
 
-# 大安區裡的兩個自動氣象站（第一個模型的範圍就是大安區）
+# 大安區裡的兩個自動氣象站。建模範圍（大安區 + 臺大公館校區）沒有其他測站，
+# 「臺灣大學」這站本身就在校園裡，所以兩站就夠了
 DAAN_STATIONS = ["CAAH60", "A0A010"]   # 大安森林、臺灣大學
 
 

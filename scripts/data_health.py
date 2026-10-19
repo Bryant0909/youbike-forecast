@@ -27,7 +27,7 @@ phase 1-2：資料健全性檢查 —— 在累積幾週資料之前，先確認
 用法：
     python scripts/data_health.py                          # 全部資料
     python scripts/data_health.py --start 2026-10-01       # 指定起始日
-    python scripts/data_health.py --district 大安區         # 只看一區（預設就是大安區）
+    python scripts/data_health.py --district 大安區         # 只看某一區（可給多個；預設是建模範圍）
 """
 
 import argparse
@@ -35,10 +35,10 @@ import sys
 
 import pandas as pd
 
-from youbike.data import load_snapshots, DataNotFound
+from youbike.data import MODEL_DISTRICTS, load_snapshots, DataNotFound
 
-# 建模範圍已定案是大安區（見 docs/DECISIONS.md），所以預設看這一區。
-DEFAULT_DISTRICT = "大安區"
+# 預設看建模範圍（大安區 + 臺大公館校區，見 youbike.data.MODEL_DISTRICTS）。
+DEFAULT_DISTRICT = MODEL_DISTRICTS
 
 # 「相鄰時間點完全沒變」的比例若高到這個程度，代表來源很可能給的是
 # 快取的舊值 —— 那整批資料都沒有價值。這是最重要的一道防線。
@@ -178,9 +178,10 @@ def main():
     ap = argparse.ArgumentParser(description="資料健全性檢查")
     ap.add_argument("--start", help="起始日期 YYYY-MM-DD")
     ap.add_argument("--end", help="結束日期 YYYY-MM-DD")
-    ap.add_argument("--district", default=DEFAULT_DISTRICT,
-                    help="要分析的行政區（預設 {}）".format(DEFAULT_DISTRICT))
+    ap.add_argument("--district", nargs="+", default=DEFAULT_DISTRICT,
+                    help="要分析的行政區，可以給多個（預設 {}）".format(" + ".join(DEFAULT_DISTRICT)))
     args = ap.parse_args()
+    scope = " + ".join(args.district)   # 印出來給人看的名字
 
     # 前四項檢查用全台北的資料（樣本多，判斷資料品質比較準），
     # 後三項只看建模範圍那一區（因為目標發生率是跟建模直接相關的）。
@@ -196,15 +197,15 @@ def main():
     alive = check_movement(allcity)
     check_dead_stations(allcity)
 
-    sub = allcity[allcity["district"] == args.district]
+    sub = allcity[allcity["district"].isin(args.district)]
     if sub.empty:
-        print("\n找不到行政區 {}，跳過後面三項".format(args.district))
+        print("\n找不到行政區 {}，跳過後面三項".format(scope))
     else:
         print()
         print("（以下只看 {}：{:,} 列、{} 站）".format(
-            args.district, len(sub), sub["station_id"].nunique()))
-        check_target_rate(sub, args.district)
-        check_concentration(sub, args.district)
+            scope, len(sub), sub["station_id"].nunique()))
+        check_target_rate(sub, scope)
+        check_concentration(sub, scope)
 
     section("結論")
     n_days = allcity["date"].nunique()
