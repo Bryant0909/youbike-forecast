@@ -23,8 +23,9 @@ from youbike.data import MODEL_DISTRICTS, MODEL_SCOPE_NAME, available_days, load
 from youbike.dataset import make_labels, time_split
 from youbike.evaluate import precision_recall_at, report
 
-# 跟 check_coverage.py 一樣的尖峰定義（台北時間，看的是「答案時刻」落在哪）
-PEAKS = [(7, 10), (17, 20)]
+# 跟 check_coverage.py 的 PEAK_WINDOWS 一樣的尖峰定義（台北時間，看的是「答案時刻」落在哪）。
+# 早上 8-11 點是 phase 1-3 EDA 實際看到的尖峰（原本猜 7-10 點）。
+PEAKS = [(8, 11), (17, 20)]
 
 
 def is_peak(df):

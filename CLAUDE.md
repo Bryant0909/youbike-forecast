@@ -30,7 +30,8 @@
 
 ## 目前狀態（2026-10-19）
 - **phase 0 收集已完成**（0-1 ~ 0-8 + 每月備份），細節見 `README.md` 的狀態清單
-- **phase 1 已完成**：EDA 在 `notebooks/01_eda.ipynb`，結論與 phase 3 特徵方向見 `docs/DECISIONS.md` 2026-10-19
+- **phase 1 已完成**：EDA 在 `notebooks/01_eda.ipynb`、推測驗證在 `02_hypotheses.ipynb`，結論與 phase 3 特徵方向見 `docs/DECISIONS.md` 2026-10-19
+- 網頁版 EDA 的資料用 `python scripts/export_dashboard.py` 重新匯出（輸出在 `data/processed/dashboard/`，再請 Claude 上傳）
 - 資料從 2026-09-30 開始累積，**建模要等 4~8 週**；在那之前做不依賴資料量的事
 - phase 2 的評估框架已先建好：`src/youbike/dataset.py`（標籤、時間切分）、`evaluate.py`、`baselines.py`、`scripts/run_baselines.py`
 - 天氣雨量 `precip_mm` 是**日累積值**，建模一律用 `youbike.weather.rain_increment()` 換算後的 `rain_mm`
@@ -38,4 +39,4 @@
 
 ## 接下來
 - [ ] **2-6** 資料滿 4 週後（約 10/28）用新建模範圍重跑 baseline，定案預測目標（可借 <= 0 或 <= 1）
-- [ ] **phase 3** LightGBM + 現在車數、最近歷史、時段 × 日子類型、站的類型、天氣、假日特徵（屆時再裝 scikit-learn、lightgbm）；評估要分區、看不只一段測試期
+- [ ] **phase 3** LightGBM + 現在車數、最近歷史、時段 × 日子類型、站的類型、全市總可借車數、天氣、假日特徵（屆時再裝 scikit-learn、lightgbm）；評估要分區、看不只一段測試期

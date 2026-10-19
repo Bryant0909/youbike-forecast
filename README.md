@@ -74,6 +74,7 @@ AI_LOG.md      AI 協作紀錄
 - [x] 1-3 EDA：哪些站最常空、尖峰時段在哪（[`notebooks/01_eda.ipynb`](notebooks/01_eda.ipynb)，10/1~10/18）
   - 建模範圍改成「大安區 + 臺大公館校區」（API 把臺大校園另列一區，只看大安區會把校園切成兩半）
   - 最重要的發現：大安區早上 10 點最難借、校區晚上 10 點最難借，兩區節奏相反
+- [x] 1-4 驗證 EDA 的兩個推測（[`notebooks/02_hypotheses.ipynb`](notebooks/02_hypotheses.ipynb)）：半夜有調度車補車（大致確認）；10/13 那週少車是全市性的
 
 **phase 2：Baseline**
 - [x] 2-1 建標籤（30 分鐘後的答案；附近沒資料就跳過，不刪原始資料）
