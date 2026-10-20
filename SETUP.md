@@ -25,16 +25,45 @@
 | 工具 | 版本 | 下載 |
 |---|---|---|
 | Git | 任何版本 | https://git-scm.com/downloads |
-| Python | **3.11 以上** | https://www.python.org/downloads/ |
+| Python | **3.11**（跟 GitHub Actions 一樣；**不要用 3.13 以上**，見「已知地雷」） | https://www.python.org/downloads/ |
 | GitHub CLI（`gh`） | 任何版本 | https://cli.github.com/ |
 
-> 💡 安裝 Python 時記得勾選 **「Add Python to PATH」**，不然終端機會找不到 `python` 指令。
+> 💡 Windows 安裝 Python 時記得勾選 **「Add Python to PATH」**，不然終端機會找不到 `python` 指令。
+
+**Mac**：建議全部用 [Homebrew](https://brew.sh/) 裝。Mac 本身內建的 Python 版本不一定是 3.11，
+所以要明確指定裝 `python@3.11`，之後也用 `python3.11` 這個指令（不是 `python` 或 `python3`）：
+
+```bash
+brew install git gh python@3.11
+```
 
 裝完確認一下：
 
 ```bash
 git --version && python --version && gh --version
 ```
+
+Mac：
+
+```bash
+git --version && python3.11 --version && gh --version
+```
+
+### 設定 git 的作者名字（新電腦一定要做）
+
+新電腦的 git 不知道你是誰，commit 會用電腦的使用者名稱，GitHub 上就對不到你的帳號。
+設定一次就好（`--global` 是整台電腦通用）：
+
+```bash
+git config --global user.name "Bryant Lin"
+```
+
+```bash
+git config --global user.email "你的 GitHub 帳號 email"
+```
+
+> email 要跟 GitHub 帳號登記的一樣（或用 GitHub 設定頁給的 `...@users.noreply.github.com`），
+> commit 才會連到你的頭像和貢獻紀錄。設好後用 `git config user.name` 確認印出來的是 `Bryant Lin`。
 
 ---
 
@@ -88,6 +117,11 @@ Mac / Linux：
 cp .env.example .env
 ```
 
+> ⚠️ **Mac 請一定要用上面的 `cp` 指令建立，不要在 Finder 裡複製改名。**
+> Finder 不允許「.」開頭的檔名，存出來會變成 `env`（沒有點）——
+> 程式讀不到，而且 `env` **不在 `.gitignore` 裡**，一不小心就會把金鑰 commit 上去。
+> 如果已經變成 `env` 了，用終端機改回來：`mv env .env`
+
 然後用文字編輯器打開 `.env`，把金鑰填進去。目前需要的：
 
 - **`CWA_API_KEY`** — 中央氣象署開放資料平臺
@@ -106,6 +140,12 @@ cp .env.example .env
 python -m venv .venv
 ```
 
+Mac（明確用 3.11 建，這樣 `.venv` 裡的 Python 就跟 Actions 同一版）：
+
+```bash
+python3.11 -m venv .venv
+```
+
 啟用它 —— Windows PowerShell：
 
 ```powershell
@@ -118,7 +158,7 @@ Mac / Linux：
 source .venv/bin/activate
 ```
 
-啟用成功的話，終端機提示符前面會多出 `(.venv)`。然後裝套件：
+啟用成功的話，終端機提示符前面會多出 `(.venv)`（之後在 venv 裡打 `python` 就是 3.11，Mac 也一樣）。然後裝套件：
 
 ```bash
 pip install -r requirements.txt
@@ -241,15 +281,48 @@ pip install --force-reinstall --no-cache-dir "pandas==2.2.3"
 如果 `python` 打下去說找不到，通常是安裝時沒勾「Add Python to PATH」。
 Windows 上可以改用 `py` 代替 `python` 試試看，或是重新安裝並勾選那個選項。
 
+Mac 上 `python` 這個指令本來就可能不存在，請用 `python3.11`（或先啟用 venv，啟用後 `python` 就有了）。
+
+### ⚠️ Python 3.13 以上連不到氣象署（天氣資料抓不到）
+
+症狀：跑 `scripts/collect_weather.py` 時出現
+
+```
+SSLCertVerificationError: [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: Missing Subject Key Identifier
+```
+
+原因：Python 3.13 起預設開啟更嚴格的憑證檢查（`VERIFY_X509_STRICT`），
+而氣象署網站的憑證少了一個欄位（Subject Key Identifier），在嚴格模式下會被判定不合格。
+這不是你的電腦或網路的問題，是新版 Python 比較挑剔。
+
+解法：**用 Python 3.11 建 venv**（第 5 步），跟 GitHub Actions 用的版本一樣。
+Mac 上最容易中獎 —— Homebrew 的 `python3` 通常是最新版（3.13、3.14），
+所以要明確打 `python3.11 -m venv .venv`。已經用錯版本建好的話：
+
+```bash
+rm -rf .venv && python3.11 -m venv .venv
+```
+
+然後重新做第 5 步的 `pip install`。
+
+### ⚠️ Mac 的 Finder 會把 `.env` 存成 `env`
+
+Finder（包括「另存新檔」對話框）不讓你用「.」開頭的檔名，會自動拿掉那個點。
+結果程式找不到 `.env`，而且 `env` 這個名字**沒有被 `.gitignore` 擋掉**，
+`git add .` 時金鑰就會被一起 commit。建立或改名 `.env` 一律用終端機的 `cp` / `mv`（見第 4 步）。
+
+> 💡 在 Finder 裡按 `Cmd + Shift + .` 可以顯示隱藏檔，確認 `.env` 有沒有在。
+
 ---
 
 ## 一分鐘版本（給已經熟悉的你）
 
 ```bash
+git config --global user.name "Bryant Lin"   # 再設 user.email
 gh auth login -s workflow
 git clone https://github.com/Bryant0909/youbike-forecast.git
 cd youbike-forecast
-python -m venv .venv && .\.venv\Scripts\Activate.ps1
+python -m venv .venv && .\.venv\Scripts\Activate.ps1      # Mac：python3.11 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 pip install -e .
 cp .env.example .env          # 再自己填金鑰

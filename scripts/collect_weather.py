@@ -44,6 +44,7 @@ phase 0-7：天氣資料收集程式（中央氣象署 自動氣象站）。
 import argparse
 import io
 import os
+import re
 import sys
 import time
 from datetime import datetime, timezone, timedelta
@@ -152,6 +153,23 @@ def load_api_key():
     )
 
 
+# 金鑰是放在網址的查詢參數裡送出去的（?Authorization=CWA-xxxx），
+# 而 requests 的錯誤訊息（連線失敗、HTTP 401…）會把【完整網址】印出來。
+# GitHub Actions 會自動把 secret 遮成 ***，但在本機跑時金鑰就會原封不動
+# 出現在終端機、log 檔、甚至貼給別人看的錯誤訊息裡。
+# 所以任何要印出或往外拋的錯誤訊息，都先經過 redact() 把金鑰遮掉。
+# 結尾排除 & 空白 ) 引號，是因為網址在錯誤訊息裡常被括號或引號包住。
+_KEY_IN_URL = re.compile(r"(Authorization=)[^&\s)'\"]+")
+
+
+def redact(message, key=None):
+    """把訊息裡的金鑰換成 ***。key 有給的話，連「單獨出現的金鑰本身」也一起遮掉。"""
+    message = _KEY_IN_URL.sub(r"\1***", str(message))
+    if key:
+        message = message.replace(key, "***")
+    return message
+
+
 # ---------------------------------------------------------------------------
 # 解析工具
 # ---------------------------------------------------------------------------
@@ -233,7 +251,11 @@ def fetch_with_retry(key):
                 log("第 {} 次嘗試失敗（{}），{} 秒後重試…".format(
                     attempt + 1, type(e).__name__, wait))
                 time.sleep(wait)
-    raise RuntimeError("重試 {} 次都失敗：{}".format(len(RETRY_WAITS) + 1, last_err))
+    # 用 redact() 遮掉金鑰；`from None` 是不要把原始的例外（訊息裡有完整網址）
+    # 接在後面 —— 不然萬一有人沒接住這個錯誤，Python 印出的 traceback
+    # 會連原始例外一起印，金鑰就從那裡漏出去。
+    raise RuntimeError("重試 {} 次都失敗：{}: {}".format(
+        len(RETRY_WAITS) + 1, type(last_err).__name__, redact(last_err, key))) from None
 
 
 def atomic_write_parquet(table, path):
@@ -386,5 +408,6 @@ if __name__ == "__main__":
     try:
         sys.exit(main())
     except Exception as e:
-        log("執行失敗：{}: {}".format(type(e).__name__, e))
+        # 最後一道防線：fetch_with_retry 已經遮過了，但其他地方的錯誤也可能帶網址
+        log("執行失敗：{}: {}".format(type(e).__name__, redact(e)))
         sys.exit(1)
