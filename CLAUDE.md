@@ -35,7 +35,6 @@
 - 資料從 2026-09-30 開始累積，**建模要等 4~8 週**；在那之前做不依賴資料量的事
 - phase 2 的評估框架已先建好：`src/youbike/dataset.py`（標籤、時間切分）、`evaluate.py`、`baselines.py`、`scripts/run_baselines.py`
 - 天氣雨量 `precip_mm` 是**日累積值**，建模一律用 `youbike.weather.rain_increment()` 換算後的 `rain_mm`
-- 本機 Python 偶發存取違規當掉（約 1/4 機率），另一個 session 在處理；遇到就重跑
 
 ## 接下來
 - [ ] **2-6** 資料滿 4 週後（約 10/28）用新建模範圍重跑 baseline，定案預測目標（可借 <= 0 或 <= 1）
