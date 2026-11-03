@@ -28,6 +28,12 @@ from youbike.evaluate import precision_recall_at, report
 PEAKS = [(8, 11), (17, 20)]
 
 
+def yesterday_taipei():
+    # 用台北時間算「昨天」；資料的 date 欄位也是台北時間的日期
+    now = pd.Timestamp.now(tz="Asia/Taipei")
+    return (now - pd.Timedelta(days=1)).strftime("%Y-%m-%d")
+
+
 def is_peak(df):
     h = df["target_hour"]
     return pd.concat([(h >= a) & (h < b) for a, b in PEAKS], axis=1).any(axis=1)
@@ -59,10 +65,12 @@ def main():
     ap.add_argument("--test-days", type=int, default=2, help="最後幾天當測試（預設 2）")
     ap.add_argument("--valid-days", type=int, default=1, help="測試之前幾天當驗證（預設 1）")
     ap.add_argument("--min-precision", type=float, default=0.8)
+    ap.add_argument("--end", default=yesterday_taipei(),
+                    help="只用到這一天為止（含），預設是昨天 —— 今天還在收，資料不完整")
     args = ap.parse_args()
     thresholds = args.threshold or [0, 1]
 
-    days = [d["date"] for d in available_days()]
+    days = [d["date"] for d in available_days() if d["date"] <= args.end]
     n_eval = args.test_days + args.valid_days
     if len(days) <= n_eval:
         raise SystemExit("資料只有 {} 天，不夠切出 {} 天驗證 + {} 天測試".format(
@@ -70,7 +78,7 @@ def main():
     test_days = days[-args.test_days:]
     valid_days = days[-n_eval:-args.test_days]
 
-    df = load_snapshots(district=args.district, verbose=False)
+    df = load_snapshots(end=args.end, district=args.district, verbose=False)
     print("{}：{:,} 列、{} 站、{} ~ {}".format(
         " + ".join(args.district), len(df), df["station_id"].nunique(), days[0], days[-1]))
     print()

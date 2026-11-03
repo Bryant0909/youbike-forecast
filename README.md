@@ -82,7 +82,7 @@ AI_LOG.md      AI 協作紀錄
 - [x] 2-3 評估指標：PR-AUC、固定精確率下的召回率
 - [x] 2-4 Baseline ①「維持現狀」
 - [x] 2-5 Baseline ②「歷史同時段平均」（`python scripts/run_baselines.py`）
-- [ ] 2-6 資料滿 4 週後重跑、定案預測目標（可借 <= 0 還是 <= 1）
+- [x] 2-6 用 4 週資料重跑、定案預測目標：**30 分鐘後可借 <= 1**（測試期發生率 22%；維持現狀 PR-AUC 0.643、歷史同時段平均 0.572）
 
 資料收集中：[`data` 分支](https://github.com/Bryant0909/youbike-forecast/tree/data)
 · [執行紀錄](https://github.com/Bryant0909/youbike-forecast/actions)
