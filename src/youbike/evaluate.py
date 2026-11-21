@@ -93,3 +93,39 @@ def report(name, y_true, score, min_precision=0.8):
         "PR-AUC": average_precision(y, score),
         "recall@P{:.0f}".format(min_precision * 100): recall_at_precision(y, score, min_precision),
     }
+
+
+# ---------------------------------------------------------------------------
+# 成績單（baseline 和模型共用，保證大家用同一把尺）
+# ---------------------------------------------------------------------------
+
+# 跟 check_coverage.py 的 PEAK_WINDOWS 一樣的尖峰定義（台北時間，看的是「答案時刻」落在哪）。
+# 早上 8-11 點是 phase 1-3 EDA 實際看到的尖峰（原本猜 7-10 點）。
+PEAKS = [(8, 11), (17, 20)]
+
+
+def is_peak(df):
+    """答案時刻（target_hour）落在尖峰時段的列。"""
+    import pandas as pd
+    h = df["target_hour"]
+    return pd.concat([(h >= a) & (h < b) for a, b in PEAKS], axis=1).any(axis=1)
+
+
+def scorecard(part, scores, subsets, min_precisions=(0.8,)):
+    """
+    一段資料上，好幾個模型 × 好幾個子集合的成績，回傳 list of dict。
+
+    part        有 y 欄位的 DataFrame
+    scores      {模型名稱: 跟 part 同 index 的分數 Series}
+    subsets     {子集合名稱: 布林 Series 或 slice(None)}，例如 全天、尖峰、大安區
+    """
+    rows = []
+    for subset_name, mask in subsets.items():
+        y = part["y"][mask]
+        for model, score in scores.items():
+            r = {"時段": subset_name, "模型": model, "樣本數": len(y), "base rate": float(y.mean()),
+                 "PR-AUC": average_precision(y, score[mask])}
+            for p in min_precisions:
+                r["recall@P{:.0f}".format(p * 100)] = recall_at_precision(y, score[mask], p)
+            rows.append(r)
+    return rows
