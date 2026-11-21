@@ -1,0 +1,153 @@
+/* 版面：上方狀態列 → 三個數字 → 左地圖右清單（窄螢幕上下疊）→ 說明。
+   顏色：中性底色帶一點藍，風險用紅／琥珀／綠三個語意色（跟主色分開）。 */
+:root {
+  --bg: #f6f7f9;
+  --panel: #ffffff;
+  --ink: #15202b;
+  --ink-2: #4a5663;
+  --muted: #7b8692;
+  --line: #e2e6ea;
+  --accent: #1f5f99;
+  --high: #d23c2f;
+  --high-bg: #fdecea;
+  --mid: #c98a06;
+  --mid-bg: #fdf4dd;
+  --low: #2e8b57;
+  --low-bg: #e6f4ec;
+  --stale-bg: #fff3cd;
+  --stale-ink: #6b4e00;
+  --shadow: 0 1px 2px rgba(21, 32, 43, .06), 0 4px 16px rgba(21, 32, 43, .05);
+  --radius: 10px;
+  --font: "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", system-ui, -apple-system, sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f151b;
+    --panel: #172029;
+    --ink: #e8edf2;
+    --ink-2: #b4bec8;
+    --muted: #8692a0;
+    --line: #26323d;
+    --accent: #6fb0ec;
+    --high: #ff6b5e;
+    --high-bg: #3a1d1a;
+    --mid: #f2b736;
+    --mid-bg: #382c12;
+    --low: #4cc786;
+    --low-bg: #16301f;
+    --stale-bg: #3a3014;
+    --stale-ink: #f6dd8f;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .3);
+    color-scheme: dark;
+  }
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--ink); font-family: var(--font); font-size: 15px; line-height: 1.6; }
+a { color: var(--accent); }
+b, strong { font-weight: 600; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+.wrap { max-width: 1200px; margin-inline: auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+
+/* 上方 */
+.top { background: var(--panel); border-bottom: 1px solid var(--line); padding-top: env(safe-area-inset-top, 0px); }
+.top-inner { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 24px; padding-block: 16px; }
+.brand h1 { margin: 0; font-size: 1.45rem; letter-spacing: .02em; }
+.tagline { margin: 2px 0 0; color: var(--ink-2); font-size: .92rem; text-wrap: balance; }
+.status { display: inline-flex; align-items: center; gap: 8px; font-size: .88rem; color: var(--ink-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); flex: none; }
+.dot.ok { background: var(--low); }
+.dot.warn { background: var(--mid); }
+.dot.bad { background: var(--high); }
+.stale { background: var(--stale-bg); color: var(--stale-ink); font-size: .9rem; padding-block: 10px; }
+
+main { display: flex; flex-direction: column; gap: 20px; padding-block: 20px 48px; }
+
+/* 三個數字 */
+.summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.pill { background: var(--panel); border-radius: var(--radius); box-shadow: var(--shadow); padding: 12px 16px; display: flex; align-items: baseline; gap: 8px; border-left: 4px solid var(--muted); min-width: 0; }
+.pill.risk-high { border-left-color: var(--high); }
+.pill.risk-mid { border-left-color: var(--mid); }
+.pill.risk-low { border-left-color: var(--low); }
+.pill-num { font-size: 1.7rem; font-variant-numeric: tabular-nums; line-height: 1.1; white-space: nowrap; }
+.pill-num b { font-weight: 600; }
+.pill-num small { font-size: .8rem; font-weight: 400; color: var(--ink-2); margin-left: 2px; }
+.pill-label { color: var(--ink-2); font-size: .88rem; white-space: nowrap; }
+
+/* 地圖 + 清單 */
+.layout { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.map-card, .list-card { background: var(--panel); border-radius: var(--radius); box-shadow: var(--shadow); min-width: 0; }
+.map-card { position: sticky; top: 12px; overflow: hidden; }
+#map { height: min(70vh, 620px); background: var(--line); }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 16px; padding: 10px 14px; font-size: .82rem; color: var(--ink-2); border-top: 1px solid var(--line); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 11px; height: 11px; border-radius: 50%; display: inline-block; }
+.sw.risk-high { background: var(--high); }
+.sw.risk-mid { background: var(--mid); }
+.sw.risk-low { background: var(--low); }
+
+.list-card { padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+.controls { display: flex; flex-direction: column; gap: 8px; }
+.search input { width: 100%; font: inherit; padding: 9px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); }
+.search input:focus { outline: 2px solid var(--accent); outline-offset: 0; border-color: transparent; }
+.seg { display: flex; flex-wrap: wrap; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; width: fit-content; max-width: 100%; }
+.seg button { font: inherit; font-size: .86rem; padding: 6px 12px; background: transparent; color: var(--ink-2); border: 0; border-right: 1px solid var(--line); cursor: pointer; }
+.seg button:last-child { border-right: 0; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--panel); }
+.seg button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.list-meta { margin: 0; font-size: .82rem; color: var(--muted); }
+
+.stations { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; max-height: min(64vh, 560px); overflow-y: auto; }
+.st { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; padding: 10px 6px; border-bottom: 1px solid var(--line); cursor: pointer; border-radius: 6px; }
+.st:hover, .st:focus-visible, .st.is-active { background: var(--bg); outline: none; }
+.st-name { font-weight: 600; overflow-wrap: anywhere; }
+.st-sub { grid-column: 1; font-size: .82rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.st-risk { grid-row: 1 / span 2; grid-column: 2; display: flex; flex-direction: column; align-items: flex-end; justify-content: center; gap: 4px; min-width: 7.5rem; }
+.badge { font-size: .78rem; font-weight: 600; padding: 1px 8px; border-radius: 999px; white-space: nowrap; }
+.badge.risk-high { color: var(--high); background: var(--high-bg); }
+.badge.risk-mid { color: var(--mid); background: var(--mid-bg); }
+.badge.risk-low { color: var(--low); background: var(--low-bg); }
+.bar { width: 7.5rem; height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
+.bar i { display: block; height: 100%; border-radius: 3px; }
+.bar i.risk-high { background: var(--high); }
+.bar i.risk-mid { background: var(--mid); }
+.bar i.risk-low { background: var(--low); }
+.prob { font-size: .8rem; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.empty { color: var(--muted); padding: 24px 6px; text-align: center; }
+
+/* 地圖上的點與彈出視窗 */
+@media (prefers-color-scheme: dark) {
+  /* 深色模式下把底圖調暗，圓點（不在 tile 圖層裡）維持原本的亮度 */
+  .leaflet-tile-pane { filter: brightness(.72) contrast(1.08) saturate(.85); }
+}
+.leaflet-popup-content { font-family: var(--font); font-size: .9rem; line-height: 1.5; margin: 10px 14px; }
+.leaflet-popup-content b { font-weight: 600; }
+.pop-name { font-weight: 600; font-size: .98rem; margin-bottom: 2px; }
+.pop-row { color: #4a5663; font-variant-numeric: tabular-nums; }
+
+/* 說明 */
+.about { background: var(--panel); border-radius: var(--radius); box-shadow: var(--shadow); padding: 20px; }
+.about h2 { margin: 0 0 12px; font-size: 1.15rem; }
+.about-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr)); gap: 16px 28px; }
+.about h3 { margin: 0 0 4px; font-size: .98rem; }
+.about p { margin: 0 0 8px; color: var(--ink-2); font-size: .92rem; max-width: 42rem; }
+.credits { margin-top: 12px !important; font-size: .82rem !important; color: var(--muted) !important; border-top: 1px solid var(--line); padding-top: 12px; }
+
+@media (max-width: 860px) {
+  .layout { grid-template-columns: minmax(0, 1fr); }
+  .map-card { position: static; }
+  #map { height: 52vh; }
+  .stations { max-height: none; overflow: visible; }
+}
+@media (max-width: 480px) {
+  .summary { gap: 8px; }
+  .pill { flex-direction: column; gap: 0; padding: 10px 12px; }
+  .pill-num { font-size: 1.45rem; }
+  .pill-label { font-size: .78rem; }
+  .st-risk { min-width: 6rem; }
+  .bar { width: 6rem; }
+}
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }

@@ -1,0 +1,56 @@
+# 把 site/ 部署成 GitHub Pages 網頁（phase 4-7）。
+#
+# ┌─ 為什麼網頁和預測分開 ─────────────────────────────────────────────┐
+# │ 網頁（HTML/CSS/JS）只有改版時才需要重新部署，所以只在 main 的       │
+# │ site/ 有變動時跑這個 workflow。                                     │
+# │ 預測每 5 分鐘更新一次，但不跟著網頁部署：collect.yml 把預測寫進     │
+# │ data 分支的 predictions/latest.json，網頁打開時直接去讀那個檔。     │
+# │ （Pages 每小時大約只能建置 10 次，每 5 分鐘部署一次會超過上限。）  │
+# └────────────────────────────────────────────────────────────────────┘
+#
+# 第一次使用前，要在 repo 的 Settings -> Pages -> Build and deployment
+# 把 Source 設成「GitHub Actions」（見 docs/DECISIONS.md 2026-11-22）。
+name: 部署網頁
+
+on:
+  push:
+    branches: [main]
+    paths: ["site/**", ".github/workflows/pages.yml"]
+  workflow_dispatch:
+
+# 部署 Pages 需要的最小權限：讀程式、寫 Pages、用 OIDC 證明「這是這個 repo 的 workflow」
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 同時只部署一次；新的進來時不取消正在部署的，避免網頁停在半新半舊
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: 取出程式
+        uses: actions/checkout@v7
+
+      - name: 設定 Pages
+        uses: actions/configure-pages@v5
+
+      - name: 打包 site/（不含本機預覽用的 dev-data/）
+        run: rm -rf site/dev-data
+
+      - name: 上傳網頁檔案
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - name: 部署
+        id: deployment
+        uses: actions/deploy-pages@v4
