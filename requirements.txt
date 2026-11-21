@@ -12,6 +12,10 @@ pandas>=2.2,<3
 matplotlib
 notebook
 
-# 階段 3 再裝：
-# lightgbm
-# scikit-learn
+# phase 3 建模：LightGBM（梯度提升樹）；scikit-learn 是 LightGBM 的 sklearn 介面需要的
+# （2026-11-04 在 Mac 上裝的版本：lightgbm 4.7.0、scikit-learn 1.9.1，不需要另外裝 libomp）
+lightgbm>=4.5,<5
+scikit-learn>=1.5
+
+# 測試：python -m pytest tests/（特徵不偷看未來的檢查）
+pytest
