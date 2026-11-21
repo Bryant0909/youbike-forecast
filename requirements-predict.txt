@@ -1,0 +1,7 @@
+# GitHub Actions 每 5 分鐘收集完資料後，跑 scripts/predict.py 需要的套件（phase 4）。
+# 收集本身只需要 requirements-collect.txt；這份分開放，預測裝不起來也不影響收集。
+# 不含 scikit-learn：上線只用 lightgbm.Booster 讀模型預測，用不到 sklearn 的介面。
+-r requirements-collect.txt
+pandas>=2.2,<3
+numpy
+lightgbm>=4.5,<5

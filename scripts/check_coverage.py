@@ -88,6 +88,14 @@ WEATHER_PER_DAY = 144          # 24 小時 ÷ 10 分鐘
 MIN_WEATHER_COVERAGE = 0.80
 MIN_WEATHER_STATIONS = 200
 
+# ---------------------------------------------------------------------------
+# 模型預測（phase 4，收集完接著預測）
+# ---------------------------------------------------------------------------
+# 預測那一步設了 continue-on-error（失敗不能害收集也停），代價是它壞掉時
+# 不會讓收集變紅 —— 所以在這裡數「有快照的時刻裡，幾成也有預測」。
+# 門檻跟 YouBike 覆蓋率一樣 90%：偶爾一次套件下載失敗沒關係，持續壞掉一定會被抓到。
+MIN_PREDICTION_COVERAGE = 0.90
+
 
 def log(msg):
     print(msg, flush=True)
@@ -374,6 +382,56 @@ def check_weather(data_dir, date_str, lines, problems):
             n_st, MIN_WEATHER_STATIONS))
 
 
+def check_predictions(data_dir, date_str, snapshot_times, lines, problems):
+    """
+    檢查模型預測的覆蓋率：這一天有快照的時刻，幾成也有預測紀錄。
+
+    預測從 phase 4 上線那天才開始，更早的日子沒有預測是正常的，略過。
+    """
+    pred_dir = os.path.join(data_dir, "predictions")
+    lines.append("### 模型預測")
+    lines.append("")
+
+    days = sorted(n[:10] for n in os.listdir(pred_dir)
+                  if DATE_RE.match(n[:10]) and (n.endswith(".parquet") or len(n) == 10)) \
+        if os.path.isdir(pred_dir) else []
+    if not days or date_str < days[0]:
+        lines.append("（預測還沒上線，略過）")
+        lines.append("")
+        return
+
+    day_file = os.path.join(pred_dir, date_str + ".parquet")
+    day_dir = os.path.join(pred_dir, date_str)
+    paths = [day_file] if os.path.isfile(day_file) else (
+        [os.path.join(day_dir, f) for f in sorted(os.listdir(day_dir)) if f.endswith(".parquet")]
+        if os.path.isdir(day_dir) else [])
+    pred_times = set()
+    for path in paths:
+        pred_times.update(pq.read_table(path, columns=["src_time"]).column("src_time").to_pylist())
+    pred_local = {s.astimezone(TAIPEI_TZ) for s in pred_times}
+
+    # 上線當天：預測是從當天某個時刻才開始的，只算那之後的時刻，免得上線第一天就誤報
+    if date_str == days[0] and pred_local:
+        first = min(pred_local)
+        snapshot_times = [s for s in snapshot_times if s >= first]
+        lines.append("- 預測從 {} 開始（上線第一天，只算這之後）".format(first.strftime("%H:%M")))
+        lines.append("")
+
+    n_snap = len(snapshot_times)
+    n_hit = sum(1 for s in snapshot_times if s in pred_local)
+    cov = n_hit / n_snap if n_snap else 0.0
+    ok = "✅" if cov >= MIN_PREDICTION_COVERAGE else "❌"
+    lines.append("| 項目 | 數值 | 門檻 | |")
+    lines.append("|---|---|---|---|")
+    lines.append("| 有預測的時刻 | {} / {}（有快照的時刻） | — | |".format(n_hit, n_snap))
+    lines.append("| 覆蓋率 | **{:.1f}%** | ≥ {:.0f}% | {} |".format(
+        cov * 100, MIN_PREDICTION_COVERAGE * 100, ok))
+    lines.append("")
+    if cov < MIN_PREDICTION_COVERAGE:
+        problems.append("模型預測覆蓋率只有 {:.1f}%（門檻 {:.0f}%）—— 請看 collect.yml 的「預測」步驟有沒有黃色警告".format(
+            cov * 100, MIN_PREDICTION_COVERAGE * 100))
+
+
 def build_report(date_str, data_dir, check_freshness):
     """
     做出報告，回傳 (problems, markdown)。
@@ -485,6 +543,9 @@ def build_report(date_str, data_dir, check_freshness):
 
     # --- 6. 天氣資料 ---
     check_weather(data_dir, date_str, lines, problems)
+
+    # --- 6b. 模型預測（phase 4）---
+    check_predictions(data_dir, date_str, [s for s in local_times if s <= day_end], lines, problems)
 
     # --- 7. 其他資訊（不設門檻，只是給你參考）---
     lines.append("### 其他")

@@ -49,11 +49,15 @@ def citywide_totals(df):
     return out.drop(columns="city_docks").reset_index()
 
 
-def load_citywide(end=None, data_dir=None, verbose=True):
-    """一天一天讀全台北的快照，回傳 citywide_totals() 的結果（到 end 那天為止，含）。"""
+def load_citywide(end=None, data_dir=None, verbose=True, start=None):
+    """
+    一天一天讀全台北的快照，回傳 citywide_totals() 的結果（start ~ end，含頭含尾）。
+    上線預測時只需要最近兩天（start = 昨天）：60 分鐘前的總數、
+    判斷「站數不完整」用的過去 24 小時中位數，都不會超過這個範圍。
+    """
     parts = []
     for day in available_days(data_dir):
-        if end and day["date"] > end:
+        if (end and day["date"] > end) or (start and day["date"] < start):
             continue
         frames = [pq.read_table(p, columns=COLUMNS).to_pandas() for p in day["paths"]]
         parts.append(citywide_totals(pd.concat(frames, ignore_index=True)))

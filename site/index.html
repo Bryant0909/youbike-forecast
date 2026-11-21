@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>大安借車預報</title>
+  <meta name="description" content="大安區與臺大校區的 YouBike 站，30 分鐘後會不會借不到車？每 5 分鐘更新的機器學習預測。">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <div class="wrap top-inner">
+      <div class="brand">
+        <h1>大安借車預報</h1>
+        <p class="tagline">大安區與臺大校區的 YouBike 站，<strong>30 分鐘後</strong>會不會借不到車（剩 1 台以下）</p>
+      </div>
+      <div class="status" id="status" role="status" aria-live="polite">
+        <span class="dot" id="status-dot"></span>
+        <span id="status-text">讀取中…</span>
+      </div>
+    </div>
+  </header>
+
+  <div class="stale" id="stale" hidden>
+    <div class="wrap">資料已經超過 <b id="stale-min">—</b> 分鐘沒有更新，下面的預測可能過時了。收集或預測可能暫時停擺，請以現場為準。</div>
+  </div>
+
+  <main class="wrap">
+    <section class="summary" aria-label="現在的狀況">
+      <div class="pill risk-high"><span class="pill-num"><b id="n-high">—</b><small>站</small></span><span class="pill-label">很可能借不到</span></div>
+      <div class="pill risk-mid"><span class="pill-num"><b id="n-mid">—</b><small>站</small></span><span class="pill-label">可能借不到</span></div>
+      <div class="pill risk-low"><span class="pill-num"><b id="n-low">—</b><small>站</small></span><span class="pill-label">應該借得到</span></div>
+    </section>
+
+    <section class="layout">
+      <div class="map-card">
+        <div id="map" aria-label="站點地圖"></div>
+        <div class="legend">
+          <span><i class="sw risk-high"></i>很可能借不到</span>
+          <span><i class="sw risk-mid"></i>可能借不到</span>
+          <span><i class="sw risk-low"></i>應該借得到</span>
+        </div>
+      </div>
+
+      <div class="list-card">
+        <div class="controls">
+          <label class="search">
+            <span class="visually-hidden">搜尋站名</span>
+            <input id="q" type="search" placeholder="搜尋站名，例如：公館、科技大樓" autocomplete="off">
+          </label>
+          <div class="seg" role="group" aria-label="區域">
+            <button type="button" data-area="all" aria-pressed="true">全部</button>
+            <button type="button" data-area="大安區" aria-pressed="false">大安區</button>
+            <button type="button" data-area="臺大公館校區" aria-pressed="false">臺大校區</button>
+          </div>
+          <div class="seg" role="group" aria-label="排序">
+            <button type="button" data-sort="risk" aria-pressed="true">風險高的先</button>
+            <button type="button" data-sort="name" aria-pressed="false">站名</button>
+            <button type="button" data-sort="near" aria-pressed="false" id="sort-near">離我近的先</button>
+          </div>
+        </div>
+        <p class="list-meta" id="list-meta"></p>
+        <ol class="stations" id="stations"></ol>
+      </div>
+    </section>
+
+    <section class="about" id="about">
+      <h2>這是怎麼算出來的</h2>
+      <div class="about-grid">
+        <div>
+          <h3>預測什麼</h3>
+          <p>每 5 分鐘抓一次臺北市 YouBike 2.0 的即時資料，用機器學習模型（LightGBM）預測每一站
+            <b>30 分鐘後可借車輛是不是 1 台以下</b>。剩 1 台也算，因為走過去的路上很可能就被借走了。</p>
+          <p>資料本身大約晚 1 ~ 2 分鐘才拿得到，再加上計算時間，畫面上的「30 分鐘後」實際上大約是 27 分鐘後。</p>
+        </div>
+        <div>
+          <h3>準不準</h3>
+          <p>用模型沒看過的日子（<span id="m-valid">—</span>）測試：被標成「很可能借不到」的站，
+            約 <b id="m-prec">—</b> 真的借不到；所有借不到的情況裡，它能提前抓到約 <b id="m-recall">—</b>。
+            這是測試期間的成績，不保證每天都一樣準。</p>
+          <p>「維持現狀」（現在沒車就猜等一下也沒車）在同樣的精確率下只能抓到 3 成多。</p>
+        </div>
+        <div>
+          <h3>還會猜錯的時候</h3>
+          <p>最難的是<b>突然被借光</b>：現在還有好幾台，30 分鐘內被一群人借走，常發生在通勤時段的捷運站。
+            颱風、活動、施工這種模型沒看過的狀況也會不準。</p>
+          <p>這是個人的機器學習作品，不是官方服務，請以現場為準。</p>
+        </div>
+      </div>
+      <p class="credits">
+        資料來源：臺北市資料大平臺（YouBike 2.0 即時資訊）、中央氣象署（自動氣象站）。
+        模型版本 <span id="m-version">—</span>。
+        程式和完整的分析在 <a href="https://github.com/Bryant0909/youbike-forecast">GitHub</a>。
+      </p>
+    </section>
+  </main>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+          integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="app.js"></script>
+</body>
+</html>

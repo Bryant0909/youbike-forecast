@@ -35,6 +35,9 @@ MONTH_RE = re.compile(r"^\d{4}-\d{2}$")
 # 每份備份都附上的「基本資料」—— 單獨拿到一個月的備份也能知道站名、經緯度
 ALWAYS_INCLUDE = ["stations.parquet", "weather_stations.parquet", "README.md"]
 DATASET_DIRS = ["snapshots", "weather"]
+# 有就備份、沒有不算錯的資料夾：預測紀錄 2026-11 下旬才開始有（phase 4），
+# 更早的月份沒有這個資料夾是正常的
+OPTIONAL_DIRS = ["predictions"]
 
 
 def previous_month():
@@ -57,10 +60,11 @@ def collect_files(data_dir, month):
     檔案清單是相對於 data_dir 的路徑。
     """
     files, problems = [], []
-    for sub in DATASET_DIRS:
+    for sub in DATASET_DIRS + OPTIONAL_DIRS:
         d = os.path.join(data_dir, sub)
         if not os.path.isdir(d):
-            problems.append("找不到 {}/ 資料夾".format(sub))
+            if sub not in OPTIONAL_DIRS:
+                problems.append("找不到 {}/ 資料夾".format(sub))
             continue
         for name in sorted(os.listdir(d)):
             if not name.startswith(month + "-"):
@@ -97,7 +101,7 @@ def build_manifest(data_dir, month, files):
     lines = ["# 資料備份 {}".format(month), "",
              "產生時間：{:%Y-%m-%d %H:%M}（台北）".format(datetime.now(TAIPEI_TZ)), ""]
     problems = []
-    days = {sub: [] for sub in DATASET_DIRS}
+    days = {sub: [] for sub in DATASET_DIRS + OPTIONAL_DIRS}
 
     lines += ["| 檔案 | 列數 | 大小 | SHA256 |", "|---|---:|---:|---|"]
     for rel in files:
@@ -121,7 +125,7 @@ def build_manifest(data_dir, month, files):
     last = (first.replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)
     all_days = [(first + timedelta(days=i)).strftime("%Y-%m-%d") for i in range(last.day)]
     lines += [""]
-    for sub in DATASET_DIRS:
+    for sub in DATASET_DIRS + [s for s in OPTIONAL_DIRS if days[s]]:
         missing = [d for d in all_days if d not in days[sub]]
         lines.append("- `{}`：{} 天有資料{}".format(
             sub, len(days[sub]),
@@ -176,7 +180,8 @@ def main():
     print("✅ {}：{} 個檔，{:,} bytes".format(archive, len(files), os.path.getsize(archive)))
     print("   SHA256 {}".format(digest))
     for sub, d in days.items():
-        print("   {}：{} 天".format(sub, len(d)))
+        if d or sub not in OPTIONAL_DIRS:
+            print("   {}：{} 天".format(sub, len(d)))
 
     # 交給 GitHub Actions 後面的步驟用
     gh_out = os.environ.get("GITHUB_OUTPUT")

@@ -146,6 +146,12 @@ def weather_features(sample_times, weather):
     import numpy as np
     import pandas as pd
 
+    cols = ["rain_30m", "rain_60m", "temp_c"]
+    if weather is None or len(weather) == 0:
+        # 天氣收集失敗（氣象署掛掉、金鑰過期…）時不要讓預測整個停掉：
+        # 天氣特徵全部當成「不知道」（NaN），LightGBM 本來就會處理缺值
+        return pd.DataFrame(np.nan, columns=cols, index=sample_times.index, dtype="float32")
+
     w = rain_increment(weather)
     w = w.sort_values(["station_id", "obs_time"])
     # 以觀測時間為視窗加總雨量：(obs − 30 分, obs]。雨量是空值的那幾筆不算進去，
@@ -164,7 +170,6 @@ def weather_features(sample_times, weather):
 
     left = pd.DataFrame({"t": sample_times.astype(per_station["available_at"].dtype).reset_index(drop=True),
                          "_pos": np.arange(len(sample_times))}).sort_values("t")
-    cols = ["rain_30m", "rain_60m", "temp_c"]
     stacked = []
     for sid, g in per_station.groupby("station_id"):
         m = pd.merge_asof(left, g[["available_at"] + cols], left_on="t", right_on="available_at",

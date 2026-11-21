@@ -48,7 +48,8 @@ DATE_DIR_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 # 要壓縮哪些資料集
 # ---------------------------------------------------------------------------
 #
-# 現在有兩種資料要壓：YouBike 快照（每 5 分鐘）和天氣觀測（每 10 分鐘）。
+# 現在有三種資料要壓：YouBike 快照（每 5 分鐘）、天氣觀測（每 10 分鐘）、
+# 模型的預測紀錄（phase 4，每 5 分鐘，跟快照一一對應）。
 # 它們的壓縮邏輯一模一樣，只有「欄位、時間欄位名稱、一天幾筆」不同，
 # 所以把差異抽成下面這份規格，流程只寫一次。
 #
@@ -75,6 +76,16 @@ DATASETS = {
             "station_id", "temp_c", "humidity_pct", "pressure_hpa",
             "wind_speed_ms", "wind_dir_deg", "gust_ms", "precip_mm",
             "uv_index", "sunshine", "weather", "obs_time", "fetched_at",
+        ],
+    },
+    "predictions": {
+        "label": "模型預測紀錄",
+        "time_col": "src_time",      # 一個小檔 = 一個資料時刻（predict.py 同一刻不會預測兩次）
+        "per_day": 288,
+        # 必須跟 predict.py 寫出的預測紀錄一致
+        "columns": [
+            "station_id", "src_time", "bikes_available", "prob", "alert",
+            "model_version", "predicted_at",
         ],
     },
 }
