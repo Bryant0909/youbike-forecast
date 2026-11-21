@@ -27,12 +27,15 @@
 ```
 SETUP.md       換電腦時怎麼還原
 .github/       GitHub Actions 排程（收集、壓縮、監控）
-scripts/       資料收集（YouBike／天氣）、壓縮、覆蓋率檢查、每月備份、跑 baseline
+scripts/       資料收集（YouBike／天氣）、壓縮、覆蓋率檢查、每月備份、
+               跑 baseline、訓練模型（train_model.py）、特徵組實驗（ablation.py）
 src/youbike/   資料載入（data.py、weather.py）、標籤與切分（dataset.py）、
-               評估指標（evaluate.py）、baseline（baselines.py）
+               評估指標（evaluate.py）、baseline（baselines.py）、
+               特徵（features.py、calendar_tw.py、citywide.py）、模型（model.py）
+tests/         特徵「不偷看未來」等檢查（python -m pytest tests/）
 pyproject.toml  讓 import youbike 能用（pip install -e .）
 data/raw/      原始資料（不上傳 GitHub）
-notebooks/     EDA 與實驗
+notebooks/     EDA、推測驗證、模型分析
 docs/          設計決策
 AI_LOG.md      AI 協作紀錄
 ```
@@ -83,6 +86,23 @@ AI_LOG.md      AI 協作紀錄
 - [x] 2-4 Baseline ①「維持現狀」
 - [x] 2-5 Baseline ②「歷史同時段平均」（`python scripts/run_baselines.py`）
 - [x] 2-6 用 4 週資料重跑、定案預測目標：**30 分鐘後可借 <= 1**（測試期發生率 22%；維持現狀 PR-AUC 0.643、歷史同時段平均 0.572）
+
+**phase 3：第一個模型（LightGBM）** ✅ —— 分析在 [`notebooks/03_model.ipynb`](notebooks/03_model.ipynb)
+- [x] 3-1 安裝 LightGBM、scikit-learn
+- [x] 3-2 ~ 3-6 特徵（`src/youbike/features.py`）：這一站自己的狀態、日曆與國定假日、站的類型、全台北總數、天氣；
+  `tests/test_features.py` 用「刪掉未來重算、特徵必須不變」檢查不偷看未來
+- [x] 3-7 LightGBM 跟 baseline 同一張成績單（`python scripts/train_model.py`）
+- [x] 3-8 三段測試期都贏（`--folds`）；固定精確率的指標定案 recall@P70
+- [x] 3-9 特徵組實驗（`scripts/ablation.py`）與錯誤分析
+- [x] 3-10 文件與成果網頁
+
+| 測試期 PR-AUC（<= 1，三段平均） | 全天 | 尖峰 | 大安區 | 校區 |
+|---|---|---|---|---|
+| ① 維持現狀 | 0.648 | 0.566 | 0.547 | 0.802 |
+| ② 歷史同時段平均 | 0.553 | 0.538 | 0.422 | 0.706 |
+| **③ LightGBM** | **0.780** | **0.697** | **0.668** | **0.893** |
+
+在「說會沒車時，10 次至少對 7 次」的前提下，LightGBM 能提前抓到約 **72%** 的借不到（維持現狀 38%）。
 
 資料收集中：[`data` 分支](https://github.com/Bryant0909/youbike-forecast/tree/data)
 · [執行紀錄](https://github.com/Bryant0909/youbike-forecast/actions)
