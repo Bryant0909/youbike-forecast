@@ -1,0 +1,82 @@
+{
+  "version": "2026-11-21",
+  "created_at": "2026-11-21T20:43:02Z",
+  "target": "30 分鐘後可借車輛 <= 1",
+  "threshold": 1,
+  "horizon_min": 30,
+  "districts": [
+    "大安區",
+    "臺大公館校區"
+  ],
+  "data": {
+    "start": "2026-09-30",
+    "end": "2026-11-21",
+    "n_samples": 3574466,
+    "n_stations": 279,
+    "base_rate": 0.21528026843729944
+  },
+  "model_file": "lgbm_le1.txt",
+  "n_trees": 412,
+  "params": {
+    "objective": "binary",
+    "learning_rate": 0.05,
+    "num_leaves": 63,
+    "min_child_samples": 200,
+    "subsample": 0.8,
+    "subsample_freq": 1,
+    "colsample_bytree": 0.8,
+    "reg_lambda": 1.0,
+    "verbose": -1
+  },
+  "features": [
+    "bikes_available",
+    "docks_available",
+    "total_docks",
+    "fill_ratio",
+    "bikes_lag5",
+    "bikes_lag15",
+    "bikes_lag30",
+    "bikes_lag60",
+    "diff5",
+    "diff15",
+    "diff30",
+    "diff60",
+    "min_60m",
+    "max_60m",
+    "min_since_low",
+    "bikes_1d_at_target",
+    "bikes_7d_at_target",
+    "target_tod_min",
+    "target_weekday",
+    "target_is_offday",
+    "next_day_offday",
+    "prev_day_offday",
+    "is_campus",
+    "lat",
+    "lon",
+    "low_rate_all",
+    "low_rate_slot",
+    "slot_days",
+    "city_bikes",
+    "city_ratio",
+    "city_low_frac",
+    "city_bikes_diff60",
+    "rain_30m",
+    "rain_60m",
+    "temp_c"
+  ],
+  "valid": {
+    "days": [
+      "2026-11-18",
+      "2026-11-21"
+    ],
+    "base_rate": 0.1815510942031715,
+    "pr_auc": 0.7491575222626347,
+    "recall_p70": 0.6590076071922545
+  },
+  "alert": {
+    "precision_target": 0.7,
+    "score_threshold": 0.4557627544337699
+  },
+  "lightgbm_version": "4.7.0"
+}
