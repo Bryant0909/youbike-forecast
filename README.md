@@ -28,11 +28,15 @@
 SETUP.md       換電腦時怎麼還原
 .github/       GitHub Actions 排程（收集、壓縮、監控）
 scripts/       資料收集（YouBike／天氣）、壓縮、覆蓋率檢查、每月備份、
-               跑 baseline、訓練模型（train_model.py）、特徵組實驗（ablation.py）
+               跑 baseline、訓練模型（train_model.py）、特徵組實驗（ablation.py）、
+               上線模型訓練（train_production.py）、上線預測（predict.py）
 src/youbike/   資料載入（data.py、weather.py）、標籤與切分（dataset.py）、
                評估指標（evaluate.py）、baseline（baselines.py）、
-               特徵（features.py、calendar_tw.py、citywide.py）、模型（model.py）
-tests/         特徵「不偷看未來」等檢查（python -m pytest tests/）
+               特徵（features.py、calendar_tw.py、citywide.py）、模型（model.py）、
+               上線用的特徵與計數表（online.py、daily_low.py）
+models/        上線用的模型和它的身分證（model_card.json）
+site/          網頁（GitHub Pages）
+tests/         特徵「不偷看未來」、線上 = 離線等檢查（python -m pytest tests/）
 pyproject.toml  讓 import youbike 能用（pip install -e .）
 data/raw/      原始資料（不上傳 GitHub）
 notebooks/     EDA、推測驗證、模型分析
@@ -103,6 +107,27 @@ AI_LOG.md      AI 協作紀錄
 | **③ LightGBM** | **0.780** | **0.697** | **0.668** | **0.893** |
 
 在「說會沒車時，10 次至少對 7 次」的前提下，LightGBM 能提前抓到約 **72%** 的借不到（維持現狀 38%）。
+
+**phase 4：上線（網頁）**
+- [x] 4-1 架構：GitHub Pages 網頁 + 預測跑在收集的同一個 job + 網頁直接讀 data 分支上的預測檔
+- [x] 4-2 線上特徵（`src/youbike/online.py`）：重用離線的 `build_features()`，`tests/test_online.py` 保證線上 = 離線
+- [x] 4-3 站的歷史計數表（`src/youbike/daily_low.py`）：每天補一次，預測時查表
+- [x] 4-4 上線模型（`python scripts/train_production.py`）：兩階段訓練，模型與 `model_card.json` 放 `models/`
+- [x] 4-5 上線預測（`scripts/predict.py`）：輸出 `predictions/latest.json` 與每次的預測紀錄
+- [x] 4-6 接進 `collect.yml`；每日覆蓋率檢查會盯「有預測的時刻佔幾成」
+- [x] 4-7 網頁（`site/`）：地圖、清單、搜尋、資料過舊警告
+- [x] 4-8 上線檢查與文件
+
+上線之後的流程：
+
+```
+cron-job.org 每 5 分鐘 → collect.yml：收集 → predict.py → 推回 data 分支
+                                              ├─ predictions/latest.json ← 網頁每 2.5 分鐘讀一次
+                                              └─ predictions/<日期>/…     ← 之後對答案算真實準確率（phase 5）
+```
+
+**每月重新訓練模型**：`python scripts/train_production.py`，確認 `models/model_card.json` 的驗證分數合理後開 PR 合併；
+合併後下一次收集就會用新模型。程式改了特徵卻沒重訓的話，預測會直接停下來（不會用錯的特徵亂猜）。
 
 資料收集中：[`data` 分支](https://github.com/Bryant0909/youbike-forecast/tree/data)
 · [執行紀錄](https://github.com/Bryant0909/youbike-forecast/actions)
