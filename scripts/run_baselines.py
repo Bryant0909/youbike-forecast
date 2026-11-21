@@ -21,22 +21,13 @@ import pandas as pd
 from youbike.baselines import historical_average_score, persistence_score
 from youbike.data import MODEL_DISTRICTS, MODEL_SCOPE_NAME, available_days, load_snapshots
 from youbike.dataset import make_labels, time_split
-from youbike.evaluate import precision_recall_at, report
-
-# 跟 check_coverage.py 的 PEAK_WINDOWS 一樣的尖峰定義（台北時間，看的是「答案時刻」落在哪）。
-# 早上 8-11 點是 phase 1-3 EDA 實際看到的尖峰（原本猜 7-10 點）。
-PEAKS = [(8, 11), (17, 20)]
+from youbike.evaluate import is_peak, precision_recall_at, report
 
 
 def yesterday_taipei():
     # 用台北時間算「昨天」；資料的 date 欄位也是台北時間的日期
     now = pd.Timestamp.now(tz="Asia/Taipei")
     return (now - pd.Timedelta(days=1)).strftime("%Y-%m-%d")
-
-
-def is_peak(df):
-    h = df["target_hour"]
-    return pd.concat([(h >= a) & (h < b) for a, b in PEAKS], axis=1).any(axis=1)
 
 
 def evaluate_split(name, part, train, threshold, min_precision):
