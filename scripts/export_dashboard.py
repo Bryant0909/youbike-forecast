@@ -41,6 +41,7 @@ from datetime import datetime
 import numpy as np
 import pandas as pd
 
+from youbike.calendar_tw import WEEKDAY_HOLIDAYS, day_type
 from youbike.data import MODEL_DISTRICTS, TAIPEI_TZ, available_days, load_snapshots
 from youbike.dataset import make_labels
 from youbike.weather import DAAN_STATIONS, load_weather, rain_increment
@@ -54,22 +55,15 @@ DEFAULT_OUT = os.path.join(REPO_ROOT, "data", "processed", "dashboard")
 # 9/30 下午才開始收，只有半天，所以預設從 10/1 開始
 DEFAULT_START = "2026-10-01"
 
-# 國定假日（跟 notebook 一樣）。國慶日 10/10 是週六，前一天 10/9 補假。
-# 之後資料跨到其他假日時要加進來；phase 3 做假日特徵時會換成完整的行事曆。
-HOLIDAYS = {"2026-10-09": "補假"}
+# 國定假日：改用 phase 3-3 的完整行事曆（youbike.calendar_tw），跟模型用同一份。
+# 只列「平日但放假」的日子，例如國慶日 10/10 是週六，前一天 10/9 補假。
+HOLIDAYS = WEEKDAY_HOLIDAYS
 
 # 一天的雨量超過這個值，圖上就標「大雨」。
 # 這是口語的「大雨」，不是氣象署的定義（氣象署的大雨是 24 小時 80 mm 以上）。
 HEAVY_RAIN_MM = 20
 
 WEEKDAY_ZH = ["一", "二", "三", "四", "五", "六", "日"]
-
-
-def day_type(date_str):
-    """上班日 / 休息日（週末 + 國定假日）。"""
-    if date_str in HOLIDAYS or pd.Timestamp(date_str).weekday() >= 5:
-        return "休息日"
-    return "上班日"
 
 
 def last_full_day():

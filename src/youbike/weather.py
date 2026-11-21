@@ -112,3 +112,67 @@ def rain_increment(df):
     out["rain_mm"] = rain.astype("float32")
     out["rain_interval_min"] = ((local - start).dt.total_seconds() / 60).astype("float32")
     return out
+
+
+# ---------------------------------------------------------------------------
+# phase 3-6：天氣特徵
+# ---------------------------------------------------------------------------
+
+WEATHER_FEATURES = ["rain_30m", "rain_60m", "temp_c"]
+
+# 最新一筆天氣超過這麼久還沒更新，就當作「不知道」（NaN），不要拿很舊的天氣硬接
+WEATHER_MAX_AGE_MIN = 40
+
+
+def weather_features(sample_times, weather):
+    """
+    把天氣接到樣本上：t 那一刻「已經拿到」的最新天氣。
+
+    【用拿到的時間，不是觀測時間】
+    氣象署 16:00 的觀測，我們實測要 10~25 分鐘後（平均 12.6 分鐘）才拿得到。
+    如果用觀測時間對齊，16:05 的樣本就會用到 16:00 那筆 —— 但真的在 16:05
+    那一刻，那筆根本還沒公布。所以這裡用 fetched_at（我們實際收到的時間）對齊：
+    只用 fetched_at <= t 的觀測。
+
+        rain_30m    最近 30 分鐘（3 筆觀測）下了幾毫米
+        rain_60m    最近 60 分鐘（6 筆觀測）下了幾毫米
+        temp_c      氣溫
+
+    weather   load_weather(station_ids=DAAN_STATIONS) 的結果（多個測站會取平均）
+    回傳 DataFrame，index 跟 sample_times 一樣。
+    """
+    import warnings
+
+    import numpy as np
+    import pandas as pd
+
+    w = rain_increment(weather)
+    w = w.sort_values(["station_id", "obs_time"])
+    # 以觀測時間為視窗加總雨量：(obs − 30 分, obs]。雨量是空值的那幾筆不算進去，
+    # 但視窗裡一筆有效值都沒有時就是空值（不知道），不是 0
+    parts = []
+    for sid, g in w.groupby("station_id"):
+        r = g.set_index("obs_time")["rain_mm"]
+        parts.append(pd.DataFrame({
+            "station_id": sid,
+            "available_at": g["fetched_at"].reset_index(drop=True),
+            "rain_30m": r.rolling("30min", min_periods=1).sum().to_numpy(),
+            "rain_60m": r.rolling("60min", min_periods=1).sum().to_numpy(),
+            "temp_c": g["temp_c"].to_numpy(),
+        }))
+    per_station = pd.concat(parts, ignore_index=True).sort_values("available_at")
+
+    left = pd.DataFrame({"t": sample_times.astype(per_station["available_at"].dtype).reset_index(drop=True),
+                         "_pos": np.arange(len(sample_times))}).sort_values("t")
+    cols = ["rain_30m", "rain_60m", "temp_c"]
+    stacked = []
+    for sid, g in per_station.groupby("station_id"):
+        m = pd.merge_asof(left, g[["available_at"] + cols], left_on="t", right_on="available_at",
+                          direction="backward", tolerance=pd.Timedelta(minutes=WEATHER_MAX_AGE_MIN))
+        stacked.append(m.sort_values("_pos")[cols].to_numpy(dtype="float64"))
+    # 幾個測站取平均（某一站缺資料時就用另一站）
+    # （兩站都沒資料時 nanmean 會警告「空的平均」，結果是 NaN，正是我們要的）
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=RuntimeWarning)
+        avg = np.nanmean(np.stack(stacked), axis=0)
+    return pd.DataFrame(avg.astype("float32"), columns=cols, index=sample_times.index)
