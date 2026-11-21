@@ -186,7 +186,31 @@ def _past_days_rate(daily, lookup, by):
     return rate, days
 
 
-def profile_features(history, samples, stations):
+def daily_low_counts(history):
+    """
+    每站、每天、每小時「<= 1 台」的筆數（low）和總筆數（n）。
+
+    站的歷史比例（low_rate_all、low_rate_slot）只需要這張小表就能算：
+    一天只有「站數 × 24」列（279 站約 6,700 列），比原始快照小 40 倍以上。
+    phase 4 上線時，這張表每天存一次（profiles/daily_low.parquet），
+    每 5 分鐘預測時直接查表，不用每次重讀全部歷史。
+
+    回傳欄位：station_id, day（台北時間的日期，無時區）, offday, hour, low, n
+    """
+    from youbike.calendar_tw import is_offday
+
+    h = history[["station_id", "src_time", "bikes_available"]].copy()
+    local = h["src_time"].dt.tz_convert("Asia/Taipei")
+    h["day"] = local.dt.normalize().dt.tz_localize(None)
+    h["hour"] = local.dt.hour.astype("int8")
+    off = {d: is_offday(d) for d in h["day"].unique()}
+    h["offday"] = h["day"].map(off).astype(bool)
+    h["low"] = (h["bikes_available"] <= LOW_BIKES).astype("int32")
+    return (h.groupby(["station_id", "day", "offday", "hour"], observed=True)["low"]
+            .agg(low="sum", n="count").reset_index())
+
+
+def profile_features(samples, stations, daily):
     """
     這個站「是哪一種站」。EDA 發現兩區節奏相反：大安區上班日早上最難借、
     校區晚上最難借（phase 1-3），模型必須知道它在看的是哪一種站。
@@ -202,21 +226,16 @@ def profile_features(history, samples, stations):
     「過去的日子」= t 那天以前（不含當天）。每一筆樣本都只用它自己的過去，
     所以不用分「訓練期才能算」，也不會偷看未來。
     代價是最前面幾天沒有歷史（NaN），LightGBM 會把 NaN 當成「不知道」處理。
+
+    daily   daily_low_counts() 的結果。離線時從完整歷史算，上線時讀每天存好的那張表；
+            兩邊只要涵蓋 t 那天以前的所有日子，算出來就一模一樣
+            （t 當天以後的列有沒有在表裡都沒差，查表時本來就不會用到）。
     """
     from youbike.calendar_tw import is_offday
 
-    h = history[["station_id", "src_time", "bikes_available"]].copy()
-    local = h["src_time"].dt.tz_convert("Asia/Taipei")
-    h["day"] = local.dt.normalize().dt.tz_localize(None)
-    h["hour"] = local.dt.hour.astype("int8")
-    off = {d: is_offday(d) for d in h["day"].unique()}
-    h["offday"] = h["day"].map(off)
-    h["low"] = (h["bikes_available"] <= LOW_BIKES).astype("int32")
-
-    daily_slot = (h.groupby(["station_id", "offday", "hour", "day"], observed=True)["low"]
-                  .agg(low="sum", n="count").reset_index())
-    daily_all = (h.groupby(["station_id", "day"], observed=True)["low"]
-                 .agg(low="sum", n="count").reset_index())
+    daily_slot = daily[["station_id", "offday", "hour", "day", "low", "n"]]
+    daily_all = (daily.groupby(["station_id", "day"], observed=True)[["low", "n"]]
+                 .sum().reset_index())
 
     s_local = samples["src_time"].dt.tz_convert("Asia/Taipei")
     t_local = (samples["src_time"] + pd.Timedelta(minutes=HORIZON_MIN)).dt.tz_convert("Asia/Taipei")
@@ -245,7 +264,7 @@ def profile_features(history, samples, stations):
 # 組裝
 # ---------------------------------------------------------------------------
 
-def build_features(samples, history, stations=None, citywide=None, weather=None):
+def build_features(samples, history, stations=None, citywide=None, weather=None, daily_low=None):
     """
     把各組特徵接到樣本上，回傳「樣本 + 特徵欄位」的 DataFrame（列的順序跟 samples 一樣）。
 
@@ -255,6 +274,8 @@ def build_features(samples, history, stations=None, citywide=None, weather=None)
     citywide  citywide.load_citywide() 的結果（全台北每個時刻的總數）
     weather   weather.load_weather(station_ids=DAAN_STATIONS) 的結果
     後三個是 None 就自己讀（讀到 history 的最後一天為止）。
+    daily_low daily_low_counts() 的結果；None = 從 history 算。
+              上線時 history 只有最近幾天，所以要傳進每天存好的完整表（phase 4）。
     """
     last_day = history["date"].max()
     if stations is None:
@@ -280,7 +301,8 @@ def build_features(samples, history, stations=None, citywide=None, weather=None)
     out[CALENDAR_FEATURES] = cal[CALENDAR_FEATURES]
 
     # 3-4：站的類型
-    prof = profile_features(history, out, stations)
+    daily = daily_low_counts(history) if daily_low is None else daily_low
+    prof = profile_features(out, stations, daily)
     out[FEATURE_GROUPS["profile"]] = prof[FEATURE_GROUPS["profile"]]
 
     # 3-5：全台北的狀態（同一個時刻）
