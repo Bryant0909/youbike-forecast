@@ -17,7 +17,15 @@ def test_known_days():
 
 def test_out_of_range_year_raises():
     with pytest.raises(ValueError):
-        is_offday("2027-01-04")
+        is_offday("2028-01-04")
+
+
+def test_year_end_2026_to_2027():
+    # 上線預測在 12/31 會查「隔天」：2027 年也要查得到
+    assert is_offday("2027-01-01")          # 週五，開國紀念日
+    assert is_offday("2027-02-04")          # 週四，小年夜
+    assert not is_offday("2027-01-04")      # 普通週一
+    assert is_offday("2027-12-31")          # 週五，2028 元旦（週六）的補假
 
 
 def test_calendar_features():
