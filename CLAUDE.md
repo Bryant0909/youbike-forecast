@@ -34,7 +34,7 @@
 - 網頁版 EDA 的資料用 `python scripts/export_dashboard.py` 重新匯出（輸出在 `data/processed/dashboard/`，再請 Claude 上傳）
 - **phase 2 已完成**（2-6 定案見 `docs/DECISIONS.md` 2026-11-03）：`src/youbike/dataset.py`（標籤、時間切分）、`evaluate.py`、`baselines.py`、`scripts/run_baselines.py`
 - **phase 3 已完成**：特徵 `src/youbike/features.py`（+ `calendar_tw.py`、`citywide.py`、`weather.weather_features`）、模型 `model.py`、`scripts/train_model.py`、`scripts/ablation.py`、分析 `notebooks/03_model.ipynb`。三段測試期平均 PR-AUC：LightGBM 0.780、維持現狀 0.648；recall@P70 0.718 vs 0.375
-- **phase 4 上線（網頁）已完成**：架構見 `docs/DECISIONS.md` 2026-11-22。`collect.yml` 收集完跑 `scripts/predict.py`（continue-on-error），輸出到 data 分支 `predictions/`；網頁在 `site/`（`pages.yml` 部署），直接讀 raw.githubusercontent.com 上的 `predictions/latest.json`。上線模型在 `models/`（`train_production.py` 產生，每月手動重訓、用 PR 更新）
+- **phase 4 上線（網頁）已完成**（2026-11-22 上線，https://bryant0909.github.io/youbike-forecast/ ，Pages 來源 = GitHub Actions）：架構見 `docs/DECISIONS.md` 2026-11-22。`collect.yml` 收集完跑 `scripts/predict.py`（continue-on-error），輸出到 data 分支 `predictions/`；網頁在 `site/`（`pages.yml` 部署），直接讀 raw.githubusercontent.com 上的 `predictions/latest.json`。上線模型在 `models/`（`train_production.py` 產生，每月手動重訓、用 PR 更新）
 - **改特徵 = 要重訓上線模型**：predict.py 會比對 `model_card.json` 的特徵清單，不一致就停止預測。改了 `features.py` 一定要跑 `train_production.py` 並一起 commit
 - **特徵不能偷看未來**：新增特徵後一定要跑 `python -m pytest tests/`（「刪掉未來重算、特徵必須不變」，以及「線上 = 離線」）。用整段歷史算的特徵一律「只用 t 那天以前的日子」；天氣用 `fetched_at` 對齊（觀測要 10~25 分鐘後才拿得到）
 - 天氣雨量 `precip_mm` 是**日累積值**，建模一律用 `youbike.weather.rain_increment()` 換算後的 `rain_mm`

@@ -2,6 +2,8 @@
 
 > 預測某個 YouBike 站點 30 分鐘後會不會「借不到車」或「還不了車」。
 
+🔗 **網頁：[大安借車預報](https://bryant0909.github.io/youbike-forecast/)** —— 大安區與臺大校區每一站 30 分鐘後借不到車的機率，每 5 分鐘更新
+
 ## 目標
 
 - **第一個成果**：持續收集台北 YouBike 即時資料
@@ -108,7 +110,7 @@ AI_LOG.md      AI 協作紀錄
 
 在「說會沒車時，10 次至少對 7 次」的前提下，LightGBM 能提前抓到約 **72%** 的借不到（維持現狀 38%）。
 
-**phase 4：上線（網頁）**
+**phase 4：上線（網頁）** ✅ —— [bryant0909.github.io/youbike-forecast](https://bryant0909.github.io/youbike-forecast/)（2026-11-22 上線）
 - [x] 4-1 架構：GitHub Pages 網頁 + 預測跑在收集的同一個 job + 網頁直接讀 data 分支上的預測檔
 - [x] 4-2 線上特徵（`src/youbike/online.py`）：重用離線的 `build_features()`，`tests/test_online.py` 保證線上 = 離線
 - [x] 4-3 站的歷史計數表（`src/youbike/daily_low.py`）：每天補一次，預測時查表
